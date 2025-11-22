@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Transaction, TransactionType, Category } from '@/types/financial';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -20,8 +21,9 @@ export const NewTransactionDialog = ({ onAdd }: NewTransactionDialogProps) => {
   const [type, setType] = useState<TransactionType>('expense');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
   const [category, setCategory] = useState<Category>('Contas');
+  const [isPaid, setIsPaid] = useState(false);
 
   const categories = type === 'expense' ? expenseCategories : incomeCategories;
 
@@ -33,20 +35,26 @@ export const NewTransactionDialog = ({ onAdd }: NewTransactionDialogProps) => {
       return;
     }
 
+    const today = new Date().toISOString().split('T')[0];
+
     onAdd({
       description,
       amount: parseFloat(amount),
-      date,
+      date: dueDate,
+      createdDate: today,
+      dueDate,
+      paidDate: isPaid ? today : undefined,
       category,
       type,
-      isPaid: false,
+      isPaid,
     });
 
     toast.success('Transação adicionada com sucesso!');
     setOpen(false);
     setDescription('');
     setAmount('');
-    setDate(new Date().toISOString().split('T')[0]);
+    setDueDate(new Date().toISOString().split('T')[0]);
+    setIsPaid(false);
   };
 
   const handleTypeChange = (newType: TransactionType) => {
@@ -119,13 +127,24 @@ export const NewTransactionDialog = ({ onAdd }: NewTransactionDialogProps) => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="date">Data</Label>
+            <Label htmlFor="dueDate">Data de Vencimento</Label>
             <Input
-              id="date"
+              id="dueDate"
               type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
             />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="isPaid"
+              checked={isPaid}
+              onCheckedChange={(checked) => setIsPaid(checked as boolean)}
+            />
+            <Label htmlFor="isPaid" className="text-sm font-normal cursor-pointer">
+              Marcar como {type === 'income' ? 'Recebido' : 'Pago'}
+            </Label>
           </div>
 
           <Button type="submit" className="w-full">

@@ -1,20 +1,27 @@
 import { useState } from 'react';
-import { Transaction, CategorySummary } from '@/types/financial';
+import { Transaction, CategorySummary, TransactionStatus } from '@/types/financial';
 import { mockTransactions } from '@/data/mockTransactions';
 import { SummaryCard } from '@/components/financial/SummaryCard';
 import { TransactionItem } from '@/components/financial/TransactionItem';
 import { CategoryChart } from '@/components/financial/CategoryChart';
-import { TrendingUp, TrendingDown, Wallet } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { getTransactionStatus } from '@/lib/financialUtils';
 
 const Dashboard = () => {
   const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const handleTogglePaid = (id: string) => {
     setTransactions(prev =>
       prev.map(t =>
-        t.id === id ? { ...t, isPaid: !t.isPaid } : t
+        t.id === id ? { 
+          ...t, 
+          isPaid: !t.isPaid,
+          paidDate: !t.isPaid ? new Date().toISOString().split('T')[0] : undefined
+        } : t
       )
     );
     toast.success('Transação atualizada!');
@@ -30,9 +37,16 @@ const Dashboard = () => {
 
   const netBalance = totalToReceive - totalToPay;
 
+  const overdueTransactions = transactions.filter(t => getTransactionStatus(t) === 'overdue');
+  const overdueAmount = overdueTransactions.reduce((sum, t) => sum + t.amount, 0);
+
   const pendingTransactions = transactions
-    .filter(t => !t.isPaid)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    .filter(t => {
+      if (t.isPaid) return false;
+      if (statusFilter === 'all') return true;
+      return getTransactionStatus(t) === statusFilter;
+    })
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
   const expensesByCategory: CategorySummary[] = transactions
     .filter(t => t.type === 'expense')
@@ -59,7 +73,7 @@ const Dashboard = () => {
 
       <main className="container mx-auto px-4 py-8 space-y-8">
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <SummaryCard
             title="Total a Receber"
             amount={totalToReceive}
@@ -78,13 +92,43 @@ const Dashboard = () => {
             icon={Wallet}
             variant="balance"
           />
+          {overdueTransactions.length > 0 && (
+            <div className="p-6 rounded-lg bg-gradient-to-br from-red-500 to-red-600 text-white shadow-lg border-2 border-red-400">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-red-50">Atrasados</p>
+                <AlertTriangle className="w-5 h-5 text-red-100" />
+              </div>
+              <p className="text-3xl font-bold mb-1">
+                {overdueTransactions.length}
+              </p>
+              <p className="text-sm text-red-100">
+                {new Intl.NumberFormat('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                }).format(overdueAmount)}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Pending Transactions and Chart */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Pending Transactions */}
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Transações Pendentes</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Transações Pendentes</h2>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filtrar status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="overdue">🔴 Atrasados</SelectItem>
+                  <SelectItem value="pending">🟡 Pendentes</SelectItem>
+                  <SelectItem value="future">🔵 Futuros</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-3">
               {pendingTransactions.length > 0 ? (
                 pendingTransactions.map(transaction => (

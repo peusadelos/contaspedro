@@ -1,8 +1,9 @@
 import { Transaction } from '@/types/financial';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Clock } from 'lucide-react';
+import { Check, Clock, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getTransactionStatus, getDaysOverdue, getStatusLabel, getStatusBadgeVariant } from '@/lib/financialUtils';
 
 interface TransactionItemProps {
   transaction: Transaction;
@@ -15,15 +16,18 @@ export const TransactionItem = ({ transaction, onTogglePaid }: TransactionItemPr
     currency: 'BRL',
   }).format(transaction.amount);
 
-  const formattedDate = new Date(transaction.date).toLocaleDateString('pt-BR');
+  const formattedDate = new Date(transaction.dueDate).toLocaleDateString('pt-BR');
+  const status = getTransactionStatus(transaction);
+  const daysOverdue = getDaysOverdue(transaction);
 
   return (
     <div className={cn(
       "flex items-center justify-between p-4 rounded-lg border transition-all duration-200 hover:shadow-md",
-      transaction.isPaid ? "bg-muted/50 border-muted" : "bg-card border-border"
+      transaction.isPaid ? "bg-muted/50 border-muted" : "bg-card border-border",
+      status === 'overdue' && "border-red-500/50 bg-red-50/50 dark:bg-red-950/10"
     )}>
       <div className="flex-1 space-y-1">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <p className={cn(
             "font-medium",
             transaction.isPaid && "text-muted-foreground line-through"
@@ -33,8 +37,19 @@ export const TransactionItem = ({ transaction, onTogglePaid }: TransactionItemPr
           <Badge variant="outline" className="text-xs">
             {transaction.category}
           </Badge>
+          <Badge variant={getStatusBadgeVariant(status)} className="text-xs">
+            {getStatusLabel(status)}
+          </Badge>
         </div>
-        <p className="text-sm text-muted-foreground">{formattedDate}</p>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>Vencimento: {formattedDate}</span>
+          {daysOverdue > 0 && (
+            <span className="flex items-center gap-1 text-red-600 font-semibold">
+              <AlertCircle className="w-3 h-3" />
+              {daysOverdue} {daysOverdue === 1 ? 'dia' : 'dias'} de atraso
+            </span>
+          )}
+        </div>
       </div>
       
       <div className="flex items-center gap-4">
