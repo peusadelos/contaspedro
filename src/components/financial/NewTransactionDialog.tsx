@@ -1,60 +1,109 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import { Transaction, TransactionType, Category } from '@/types/financial';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface NewTransactionDialogProps {
-  onAdd: (transaction: Omit<Transaction, 'id'>) => void;
+  transaction?: Transaction;
+  onAdd?: (transaction: Omit<Transaction, 'id'>) => void;
+  onEdit?: (transaction: Transaction) => void;
+  trigger?: React.ReactNode;
 }
 
 const expenseCategories: Category[] = ['Contas', 'Gastos Pessoais', 'Compras', 'Pagamento de Dívidas'];
 const incomeCategories: Category[] = ['Salário', 'Freela', 'Extra'];
 
-export const NewTransactionDialog = ({ onAdd }: NewTransactionDialogProps) => {
+export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: NewTransactionDialogProps) => {
+  const isEditing = !!transaction;
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState<TransactionType>('expense');
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
-  const [category, setCategory] = useState<Category>('Contas');
-  const [isPaid, setIsPaid] = useState(false);
+  const [type, setType] = useState<TransactionType>(transaction?.type || 'expense');
+  const [description, setDescription] = useState(transaction?.description || '');
+  const [amount, setAmount] = useState(transaction?.amount.toString() || '');
+  const [dueDate, setDueDate] = useState(transaction?.dueDate || new Date().toISOString().split('T')[0]);
+  const [category, setCategory] = useState<Category>(transaction?.category || 'Contas');
+  const [isPaid, setIsPaid] = useState(transaction?.isPaid || false);
+  const [notes, setNotes] = useState('');
 
   const categories = type === 'expense' ? expenseCategories : incomeCategories;
+
+  useEffect(() => {
+    if (transaction) {
+      setType(transaction.type);
+      setDescription(transaction.description);
+      setAmount(transaction.amount.toString());
+      setDueDate(transaction.dueDate);
+      setCategory(transaction.category);
+      setIsPaid(transaction.isPaid);
+    }
+  }, [transaction]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!description || !amount || !category) {
-      toast.error('Preencha todos os campos');
+    if (!description.trim()) {
+      toast.error('Descrição é obrigatória');
+      return;
+    }
+
+    const amountValue = parseFloat(amount);
+    if (!amount || isNaN(amountValue) || amountValue <= 0) {
+      toast.error('Valor deve ser maior que zero');
+      return;
+    }
+
+    if (!category) {
+      toast.error('Selecione uma categoria');
       return;
     }
 
     const today = new Date().toISOString().split('T')[0];
 
-    onAdd({
-      description,
-      amount: parseFloat(amount),
-      date: dueDate,
-      createdDate: today,
-      dueDate,
-      paidDate: isPaid ? today : undefined,
-      category,
-      type,
-      isPaid,
-    });
+    if (isEditing && onEdit && transaction) {
+      onEdit({
+        ...transaction,
+        description: description.trim(),
+        amount: amountValue,
+        dueDate,
+        category,
+        type,
+        isPaid,
+        paidDate: isPaid && !transaction.isPaid ? today : transaction.paidDate,
+      });
+      toast.success('Transação atualizada com sucesso!');
+    } else if (onAdd) {
+      onAdd({
+        description: description.trim(),
+        amount: amountValue,
+        date: dueDate,
+        createdDate: today,
+        dueDate,
+        paidDate: isPaid ? today : undefined,
+        category,
+        type,
+        isPaid,
+      });
+      toast.success('Transação adicionada com sucesso!');
+    }
 
-    toast.success('Transação adicionada com sucesso!');
     setOpen(false);
-    setDescription('');
-    setAmount('');
-    setDueDate(new Date().toISOString().split('T')[0]);
-    setIsPaid(false);
+    resetForm();
+  };
+
+  const resetForm = () => {
+    if (!isEditing) {
+      setDescription('');
+      setAmount('');
+      setDueDate(new Date().toISOString().split('T')[0]);
+      setIsPaid(false);
+      setNotes('');
+    }
   };
 
   const handleTypeChange = (newType: TransactionType) => {
@@ -65,14 +114,16 @@ export const NewTransactionDialog = ({ onAdd }: NewTransactionDialogProps) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Plus className="w-4 h-4" />
-          Nova Transação
-        </Button>
+        {trigger || (
+          <Button className="gap-2">
+            <Plus className="w-4 h-4" />
+            Nova Transação
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Adicionar Transação</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar Transação' : 'Adicionar Transação'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -89,24 +140,27 @@ export const NewTransactionDialog = ({ onAdd }: NewTransactionDialogProps) => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Descrição</Label>
+            <Label htmlFor="description">Descrição *</Label>
             <Input
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Ex: Supermercado"
+              required
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="amount">Valor</Label>
+            <Label htmlFor="amount">Valor *</Label>
             <Input
               id="amount"
               type="number"
               step="0.01"
+              min="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
+              required
             />
           </div>
 
@@ -136,6 +190,17 @@ export const NewTransactionDialog = ({ onAdd }: NewTransactionDialogProps) => {
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="notes">Observações (opcional)</Label>
+            <Textarea
+              id="notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Observações adicionais..."
+              rows={3}
+            />
+          </div>
+
           <div className="flex items-center space-x-2">
             <Checkbox
               id="isPaid"
@@ -148,7 +213,7 @@ export const NewTransactionDialog = ({ onAdd }: NewTransactionDialogProps) => {
           </div>
 
           <Button type="submit" className="w-full">
-            Adicionar
+            {isEditing ? 'Salvar Alterações' : 'Adicionar'}
           </Button>
         </form>
       </DialogContent>
