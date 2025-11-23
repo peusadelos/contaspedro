@@ -2,15 +2,17 @@ import { useState } from 'react';
 import { Transaction, TransactionType, Category } from '@/types/financial';
 import { mockTransactions } from '@/data/mockTransactions';
 import { NewTransactionDialog } from '@/components/financial/NewTransactionDialog';
+import { DeleteConfirmationDialog } from '@/components/financial/DeleteConfirmationDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { getTransactionStatus, getStatusLabel, getStatusBadgeVariant, getDaysOverdue } from '@/lib/financialUtils';
+import { toast } from 'sonner';
 
 const Statement = () => {
   const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
@@ -18,13 +20,28 @@ const Statement = () => {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>(undefined);
+  const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
 
   const handleAddTransaction = (newTransaction: Omit<Transaction, 'id'>) => {
     const transaction: Transaction = {
       ...newTransaction,
-      id: String(transactions.length + 1),
+      id: `txn_${Date.now()}`,
     };
     setTransactions([transaction, ...transactions]);
+  };
+
+  const handleEditTransaction = (transaction: Transaction) => {
+    setTransactions(prev => prev.map(t => t.id === transaction.id ? transaction : t));
+    setEditingTransaction(undefined);
+  };
+
+  const handleDeleteTransaction = () => {
+    if (deletingTransaction) {
+      setTransactions(prev => prev.filter(t => t.id !== deletingTransaction.id));
+      toast.success('Transação excluída com sucesso!');
+      setDeletingTransaction(null);
+    }
   };
 
   const filteredTransactions = transactions
@@ -159,6 +176,7 @@ const Statement = () => {
                 <TableHead className="text-right">Valor</TableHead>
                 <TableHead className="text-right">Status</TableHead>
                 <TableHead className="text-right">Quitação</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -213,12 +231,34 @@ const Statement = () => {
                       <TableCell className="text-right text-sm text-muted-foreground">
                         {transaction.paidDate ? formatDateTime(transaction.paidDate) : '-'}
                       </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingTransaction(transaction)}
+                            className="h-8 w-8 p-0"
+                            title="Editar transação"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDeletingTransaction(transaction)}
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            title="Excluir transação"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   );
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                     Nenhuma transação encontrada
                   </TableCell>
                 </TableRow>
@@ -264,6 +304,21 @@ const Statement = () => {
           </div>
         </div>
       </main>
+
+      {editingTransaction && (
+        <NewTransactionDialog
+          transaction={editingTransaction}
+          onEdit={handleEditTransaction}
+          trigger={<div />}
+        />
+      )}
+
+      <DeleteConfirmationDialog
+        open={!!deletingTransaction}
+        onOpenChange={(open) => !open && setDeletingTransaction(null)}
+        transaction={deletingTransaction}
+        onConfirm={handleDeleteTransaction}
+      />
     </div>
   );
 };

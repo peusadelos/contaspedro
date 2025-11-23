@@ -1,16 +1,18 @@
 import { Transaction } from '@/types/financial';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Clock, AlertCircle } from 'lucide-react';
+import { Check, AlertCircle, Pencil, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getTransactionStatus, getDaysOverdue, getStatusLabel, getStatusBadgeVariant } from '@/lib/financialUtils';
 
 interface TransactionItemProps {
   transaction: Transaction;
   onTogglePaid: (id: string) => void;
+  onEdit?: (transaction: Transaction) => void;
+  onDelete?: (transaction: Transaction) => void;
 }
 
-export const TransactionItem = ({ transaction, onTogglePaid }: TransactionItemProps) => {
+export const TransactionItem = ({ transaction, onTogglePaid, onEdit, onDelete }: TransactionItemProps) => {
   const formattedAmount = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -52,7 +54,7 @@ export const TransactionItem = ({ transaction, onTogglePaid }: TransactionItemPr
         </div>
       </div>
       
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
         <p className={cn(
           "text-lg font-bold",
           transaction.type === 'income' ? "text-income" : "text-expense"
@@ -60,24 +62,54 @@ export const TransactionItem = ({ transaction, onTogglePaid }: TransactionItemPr
           {transaction.type === 'income' ? '+' : '-'}{formattedAmount}
         </p>
         
-        {!transaction.isPaid && (
-          <Button
-            size="sm"
-            onClick={() => onTogglePaid(transaction.id)}
-            className="gap-2"
-            variant={transaction.type === 'income' ? 'default' : 'outline'}
-          >
-            <Check className="w-4 h-4" />
-            Marcar como {transaction.type === 'income' ? 'Recebido' : 'Pago'}
-          </Button>
-        )}
-        
-        {transaction.isPaid && (
-          <Badge variant="secondary" className="gap-1">
-            <Check className="w-3 h-3" />
-            {transaction.type === 'income' ? 'Recebido' : 'Pago'}
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {!transaction.isPaid && (
+            <Button
+              size="sm"
+              onClick={() => onTogglePaid(transaction.id)}
+              className="gap-2"
+              variant={transaction.type === 'income' ? 'default' : 'outline'}
+            >
+              <Check className="w-4 h-4" />
+              <span className="hidden sm:inline">
+                {transaction.type === 'income' ? 'Recebido' : 'Pago'}
+              </span>
+            </Button>
+          )}
+          
+          {transaction.isPaid && (
+            <Badge variant="secondary" className="gap-1">
+              <Check className="w-3 h-3" />
+              {transaction.type === 'income' ? 'Recebido' : 'Pago'}
+            </Badge>
+          )}
+
+          {onEdit && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onEdit(transaction)}
+              className="gap-1"
+              title="Editar transação"
+            >
+              <Pencil className="w-4 h-4" />
+              <span className="hidden sm:inline">Editar</span>
+            </Button>
+          )}
+
+          {onDelete && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onDelete(transaction)}
+              className="gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+              title="Excluir transação"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Excluir</span>
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

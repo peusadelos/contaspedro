@@ -4,6 +4,8 @@ import { mockTransactions } from '@/data/mockTransactions';
 import { SummaryCard } from '@/components/financial/SummaryCard';
 import { TransactionItem } from '@/components/financial/TransactionItem';
 import { CategoryChart } from '@/components/financial/CategoryChart';
+import { NewTransactionDialog } from '@/components/financial/NewTransactionDialog';
+import { DeleteConfirmationDialog } from '@/components/financial/DeleteConfirmationDialog';
 import { TrendingUp, TrendingDown, Wallet, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,6 +15,29 @@ import { getTransactionStatus } from '@/lib/financialUtils';
 const Dashboard = () => {
   const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>(undefined);
+  const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
+
+  const handleAddTransaction = (transaction: Omit<Transaction, 'id'>) => {
+    const newTransaction: Transaction = {
+      ...transaction,
+      id: `txn_${Date.now()}`,
+    };
+    setTransactions(prev => [newTransaction, ...prev]);
+  };
+
+  const handleEditTransaction = (transaction: Transaction) => {
+    setTransactions(prev => prev.map(t => t.id === transaction.id ? transaction : t));
+    setEditingTransaction(undefined);
+  };
+
+  const handleDeleteTransaction = () => {
+    if (deletingTransaction) {
+      setTransactions(prev => prev.filter(t => t.id !== deletingTransaction.id));
+      toast.success('Transação excluída com sucesso!');
+      setDeletingTransaction(null);
+    }
+  };
 
   const handleTogglePaid = (id: string) => {
     setTransactions(prev =>
@@ -24,7 +49,7 @@ const Dashboard = () => {
         } : t
       )
     );
-    toast.success('Transação atualizada!');
+    toast.success('Status atualizado!');
   };
 
   const totalToReceive = transactions
@@ -63,11 +88,14 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card sticky top-0 z-10 shadow-sm">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <h1 className="text-2xl font-bold text-foreground">Controle Financeiro</h1>
-          <a href="/extrato">
-            <Button variant="outline">Ver Extrato Completo</Button>
-          </a>
+          <div className="flex items-center gap-2">
+            <NewTransactionDialog onAdd={handleAddTransaction} />
+            <a href="/extrato">
+              <Button variant="outline">Ver Extrato Completo</Button>
+            </a>
+          </div>
         </div>
       </header>
 
@@ -136,6 +164,8 @@ const Dashboard = () => {
                     key={transaction.id}
                     transaction={transaction}
                     onTogglePaid={handleTogglePaid}
+                    onEdit={setEditingTransaction}
+                    onDelete={setDeletingTransaction}
                   />
                 ))
               ) : (
@@ -150,6 +180,21 @@ const Dashboard = () => {
           <CategoryChart data={expensesByCategory} />
         </div>
       </main>
+
+      {editingTransaction && (
+        <NewTransactionDialog
+          transaction={editingTransaction}
+          onEdit={handleEditTransaction}
+          trigger={<div />}
+        />
+      )}
+
+      <DeleteConfirmationDialog
+        open={!!deletingTransaction}
+        onOpenChange={(open) => !open && setDeletingTransaction(null)}
+        transaction={deletingTransaction}
+        onConfirm={handleDeleteTransaction}
+      />
     </div>
   );
 };
