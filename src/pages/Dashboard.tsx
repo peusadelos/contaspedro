@@ -1,19 +1,33 @@
 import { useState, useEffect } from 'react';
-import { Transaction, CategorySummary, TransactionStatus } from '@/types/financial';
+import { Transaction, CategorySummary } from '@/types/financial';
 import { mockTransactions } from '@/data/mockTransactions';
 import { SummaryCard } from '@/components/financial/SummaryCard';
 import { TransactionItem } from '@/components/financial/TransactionItem';
 import { CategoryChart } from '@/components/financial/CategoryChart';
 import { NewTransactionDialog } from '@/components/financial/NewTransactionDialog';
 import { DeleteConfirmationDialog } from '@/components/financial/DeleteConfirmationDialog';
-import { TrendingUp, TrendingDown, Wallet, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { getTransactionStatus } from '@/lib/financialUtils';
 
+// Helper: get YYYY-MM string for a given date
+const toMonthKey = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+};
+
+// Helper: format YYYY-MM to "março 2026"
+const formatMonthLabel = (monthKey: string) => {
+  const [year, month] = monthKey.split('-');
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+};
+
 const Dashboard = () => {
-  // ✅ CHANGED: Load from localStorage on startup, fall back to mockTransactions if nothing saved yet
+  // Load from localStorage on startup, fall back to mockTransactions
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     try {
       const saved = localStorage.getItem('contaspedro_transactions');
@@ -27,10 +41,22 @@ const Dashboard = () => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>(undefined);
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
 
-  // ✅ ADDED: Save to localStorage whenever transactions change
+  // ✅ FEATURE: Month filter — default to current month
+  const [selectedMonth, setSelectedMonth] = useState<string>(toMonthKey(new Date()));
+
+  // ✅ FEATURE: Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
+  // Save to localStorage whenever transactions change
   useEffect(() => {
     localStorage.setItem('contaspedro_transactions', JSON.stringify(transactions));
   }, [transactions]);
+
+  // Clear selection when month or filter changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [selectedMonth, statusFilter]);
 
   const handleAddTransaction = (transaction: Omit<Transaction, 'id'>) => {
     const newTransaction: Transaction = {
@@ -66,20 +92,63 @@ const Dashboard = () => {
     toast.success('Status atualizado!');
   };
 
-  const totalToReceive = transactions
+  // ✅ Bulk selection handlers
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === pendingTransactions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pendingTransactions.map(t => t.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    setTransactions(prev => prev.filter(t => !selectedIds.has(t.id)));
+    toast.success(`${selectedIds.size} transação(ões) excluída(s)!`);
+    setSelectedIds(new Set());
+    setShowBulkDeleteConfirm(false);
+  };
+
+  // ✅ Clear demo data
+  const handleClearDemoData = () => {
+    setTransactions([]);
+    setSelectedIds(new Set());
+    toast.success('Dados de demonstração removidos!');
+  };
+
+  // ✅ Month navigation
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const date = new Date(year, month - 1 + (direction === 'next' ? 1 : -1), 1);
+    setSelectedMonth(toMonthKey(date));
+  };
+
+  // Filter transactions by selected month
+  const transactionsInMonth = transactions.filter(t =>
+    t.dueDate.startsWith(selectedMonth)
+  );
+
+  const totalToReceive = transactionsInMonth
     .filter(t => t.type === 'income' && !t.isPaid)
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const totalToPay = transactions
+  const totalToPay = transactionsInMonth
     .filter(t => t.type === 'expense' && !t.isPaid)
     .reduce((sum, t) => sum + t.amount, 0);
 
   const netBalance = totalToReceive - totalToPay;
 
-  const overdueTransactions = transactions.filter(t => getTransactionStatus(t) === 'overdue');
+  const overdueTransactions = transactionsInMonth.filter(t => getTransactionStatus(t) === 'overdue');
   const overdueAmount = overdueTransactions.reduce((sum, t) => sum + t.amount, 0);
 
-  const pendingTransactions = transactions
+  const pendingTransactions = transactionsInMonth
     .filter(t => {
       if (t.isPaid) return false;
       if (statusFilter === 'all') return true;
@@ -87,7 +156,7 @@ const Dashboard = () => {
     })
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
-  const expensesByCategory: CategorySummary[] = transactions
+  const expensesByCategory: CategorySummary[] = transactionsInMonth
     .filter(t => t.type === 'expense')
     .reduce((acc, t) => {
       const existing = acc.find(item => item.category === t.category);
@@ -99,12 +168,30 @@ const Dashboard = () => {
       return acc;
     }, [] as CategorySummary[]);
 
+  const allSelected = pendingTransactions.length > 0 && selectedIds.size === pendingTransactions.length;
+  const someSelected = selectedIds.size > 0;
+
+  // Only show "Limpar Demo" if demo data is still present (id '1' is from mockTransactions)
+  const hasDemoData = transactions.some(t => t.id === '1');
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card sticky top-0 z-10 shadow-sm">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <h1 className="text-2xl font-bold text-foreground">Controle Financeiro</h1>
           <div className="flex items-center gap-2">
+            {/* ✅ Clear demo data button — only shown while demo data exists */}
+            {hasDemoData && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearDemoData}
+                className="text-muted-foreground border-dashed"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Limpar Demo
+              </Button>
+            )}
             <NewTransactionDialog onAdd={handleAddTransaction} />
             <a href="/extrato">
               <Button variant="outline">Ver Extrato Completo</Button>
@@ -114,6 +201,20 @@ const Dashboard = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-8">
+
+        {/* ✅ Month Navigator */}
+        <div className="flex items-center justify-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigateMonth('prev')}>
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
+          <h2 className="text-lg font-semibold capitalize w-48 text-center">
+            {formatMonthLabel(selectedMonth)}
+          </h2>
+          <Button variant="ghost" size="icon" onClick={() => navigateMonth('next')}>
+            <ChevronRight className="w-5 h-5" />
+          </Button>
+        </div>
+
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <SummaryCard
@@ -171,6 +272,35 @@ const Dashboard = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* ✅ Bulk action toolbar */}
+            {pendingTransactions.length > 0 && (
+              <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 border">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 cursor-pointer accent-primary"
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {someSelected ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}
+                  </span>
+                </div>
+                {someSelected && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => setShowBulkDeleteConfirm(true)}
+                    className="gap-1"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Excluir {selectedIds.size}
+                  </Button>
+                )}
+              </div>
+            )}
+
             <div className="space-y-3">
               {pendingTransactions.length > 0 ? (
                 pendingTransactions.map(transaction => (
@@ -180,11 +310,13 @@ const Dashboard = () => {
                     onTogglePaid={handleTogglePaid}
                     onEdit={setEditingTransaction}
                     onDelete={setDeletingTransaction}
+                    isSelected={selectedIds.has(transaction.id)}
+                    onToggleSelect={handleToggleSelect}
                   />
                 ))
               ) : (
                 <p className="text-center text-muted-foreground py-8">
-                  Nenhuma transação pendente
+                  Nenhuma transação pendente em {formatMonthLabel(selectedMonth)}
                 </p>
               )}
             </div>
@@ -208,6 +340,15 @@ const Dashboard = () => {
         onOpenChange={(open) => !open && setDeletingTransaction(null)}
         transaction={deletingTransaction}
         onConfirm={handleDeleteTransaction}
+      />
+
+      {/* ✅ Bulk delete confirmation */}
+      <DeleteConfirmationDialog
+        open={showBulkDeleteConfirm}
+        onOpenChange={(open) => !open && setShowBulkDeleteConfirm(false)}
+        transaction={null}
+        customMessage={`Tem certeza que deseja excluir ${selectedIds.size} transação(ões)? Esta ação não pode ser desfeita.`}
+        onConfirm={handleBulkDelete}
       />
     </div>
   );
