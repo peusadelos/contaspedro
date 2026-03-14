@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Transaction, CategorySummary, TransactionStatus } from '@/types/financial';
 import { mockTransactions } from '@/data/mockTransactions';
 import { SummaryCard } from '@/components/financial/SummaryCard';
@@ -13,10 +13,24 @@ import { toast } from 'sonner';
 import { getTransactionStatus } from '@/lib/financialUtils';
 
 const Dashboard = () => {
-  const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
+  // ✅ CHANGED: Load from localStorage on startup, fall back to mockTransactions if nothing saved yet
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    try {
+      const saved = localStorage.getItem('contaspedro_transactions');
+      return saved ? JSON.parse(saved) : mockTransactions;
+    } catch {
+      return mockTransactions;
+    }
+  });
+
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>(undefined);
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
+
+  // ✅ ADDED: Save to localStorage whenever transactions change
+  useEffect(() => {
+    localStorage.setItem('contaspedro_transactions', JSON.stringify(transactions));
+  }, [transactions]);
 
   const handleAddTransaction = (transaction: Omit<Transaction, 'id'>) => {
     const newTransaction: Transaction = {
@@ -42,8 +56,8 @@ const Dashboard = () => {
   const handleTogglePaid = (id: string) => {
     setTransactions(prev =>
       prev.map(t =>
-        t.id === id ? { 
-          ...t, 
+        t.id === id ? {
+          ...t,
           isPaid: !t.isPaid,
           paidDate: !t.isPaid ? new Date().toISOString().split('T')[0] : undefined
         } : t
