@@ -15,6 +15,8 @@ interface DeleteConfirmationDialogProps {
   onOpenChange: (open: boolean) => void;
   transaction: Transaction | null;
   onConfirm: () => void;
+  // ✅ NEW: optional custom message for bulk delete
+  customMessage?: string;
 }
 
 export const DeleteConfirmationDialog = ({
@@ -22,13 +24,17 @@ export const DeleteConfirmationDialog = ({
   onOpenChange,
   transaction,
   onConfirm,
+  customMessage,
 }: DeleteConfirmationDialogProps) => {
-  if (!transaction) return null;
+  // ✅ Allow opening without a transaction when customMessage is provided
+  if (!transaction && !customMessage) return null;
 
-  const formattedAmount = new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(transaction.amount);
+  const formattedAmount = transaction
+    ? new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      }).format(transaction.amount)
+    : null;
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -36,17 +42,25 @@ export const DeleteConfirmationDialog = ({
         <AlertDialogHeader>
           <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
           <AlertDialogDescription className="space-y-2">
-            <p>Tem certeza que deseja excluir esta transação?</p>
-            <div className="mt-4 p-4 bg-muted rounded-lg space-y-1">
-              <p className="font-semibold">{transaction.description}</p>
-              <p className="text-sm">
-                Valor: <span className="font-bold">{formattedAmount}</span>
-              </p>
-              <p className="text-sm">Categoria: {transaction.category}</p>
-            </div>
-            <p className="text-destructive font-medium mt-4">
-              Esta ação não pode ser desfeita.
-            </p>
+            {customMessage ? (
+              // ✅ Bulk delete mode: show custom message
+              <p>{customMessage}</p>
+            ) : (
+              // Single delete mode: show transaction details
+              <>
+                <p>Tem certeza que deseja excluir esta transação?</p>
+                <div className="mt-4 p-4 bg-muted rounded-lg space-y-1">
+                  <p className="font-semibold">{transaction!.description}</p>
+                  <p className="text-sm">
+                    Valor: <span className="font-bold">{formattedAmount}</span>
+                  </p>
+                  <p className="text-sm">Categoria: {transaction!.category}</p>
+                </div>
+                <p className="text-destructive font-medium mt-4">
+                  Esta ação não pode ser desfeita.
+                </p>
+              </>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
