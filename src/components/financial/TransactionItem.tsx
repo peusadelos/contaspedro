@@ -10,9 +10,19 @@ interface TransactionItemProps {
   onTogglePaid: (id: string) => void;
   onEdit?: (transaction: Transaction) => void;
   onDelete?: (transaction: Transaction) => void;
+  // ✅ NEW: bulk selection props (optional so it stays backward compatible)
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
-export const TransactionItem = ({ transaction, onTogglePaid, onEdit, onDelete }: TransactionItemProps) => {
+export const TransactionItem = ({
+  transaction,
+  onTogglePaid,
+  onEdit,
+  onDelete,
+  isSelected = false,
+  onToggleSelect,
+}: TransactionItemProps) => {
   const formattedAmount = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -26,8 +36,24 @@ export const TransactionItem = ({ transaction, onTogglePaid, onEdit, onDelete }:
     <div className={cn(
       "flex items-center justify-between p-4 rounded-lg border transition-all duration-200 hover:shadow-md",
       transaction.isPaid ? "bg-muted/50 border-muted" : "bg-card border-border",
-      status === 'overdue' && "border-red-500/50 bg-red-50/50 dark:bg-red-950/10"
+      status === 'overdue' && "border-red-500/50 bg-red-50/50 dark:bg-red-950/10",
+      // ✅ Highlight when selected
+      isSelected && "ring-2 ring-primary border-primary bg-primary/5"
     )}>
+
+      {/* ✅ Selection checkbox */}
+      {onToggleSelect && (
+        <div className="mr-3 flex-shrink-0">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelect(transaction.id)}
+            className="w-4 h-4 cursor-pointer accent-primary"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
       <div className="flex-1 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <p className={cn(
@@ -53,7 +79,7 @@ export const TransactionItem = ({ transaction, onTogglePaid, onEdit, onDelete }:
           )}
         </div>
       </div>
-      
+
       <div className="flex items-center gap-2 sm:gap-4">
         <p className={cn(
           "text-lg font-bold",
@@ -61,7 +87,7 @@ export const TransactionItem = ({ transaction, onTogglePaid, onEdit, onDelete }:
         )}>
           {transaction.type === 'income' ? '+' : '-'}{formattedAmount}
         </p>
-        
+
         <div className="flex items-center gap-2">
           {!transaction.isPaid && (
             <Button
@@ -76,7 +102,7 @@ export const TransactionItem = ({ transaction, onTogglePaid, onEdit, onDelete }:
               </span>
             </Button>
           )}
-          
+
           {transaction.isPaid && (
             <Badge variant="secondary" className="gap-1">
               <Check className="w-3 h-3" />
