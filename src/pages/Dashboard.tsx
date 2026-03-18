@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { Transaction, CategorySummary } from '@/types/financial';
@@ -271,11 +272,11 @@ const Dashboard = ({ session }: DashboardProps) => {
             {/* ✅ Single trigger — text hidden on mobile via CSS, no dual-button trick */}
             <NewTransactionDialog onAdd={handleAddTransaction} trigger={addTrigger} />
 
-            <a href="/extrato">
-              <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5">
-                Extrato
-              </Button>
-            </a>
+            <Link to="/extrato">
+  <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5">
+    Extrato
+  </Button>
+</Link>
 
             <Button
               variant="ghost"
