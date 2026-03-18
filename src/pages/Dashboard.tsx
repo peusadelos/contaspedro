@@ -10,7 +10,7 @@ import { DeleteConfirmationDialog } from '@/components/financial/DeleteConfirmat
 import {
   TrendingUp, TrendingDown, Wallet, AlertTriangle,
   Trash2, ChevronLeft, ChevronRight, LogOut, Plus,
-  LayoutDashboard
+  LayoutDashboard, Moon, Sun
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,6 +23,7 @@ const toMonthKey = (date: Date) => {
   return `${y}-${m}`;
 };
 
+// ✅ FIX: lowercase month label (e.g. "março 2026" not "Março De 2026")
 const formatMonthLabel = (monthKey: string) => {
   const [year, month] = monthKey.split('-');
   const date = new Date(Number(year), Number(month) - 1, 1);
@@ -70,6 +71,26 @@ const Dashboard = ({ session }: DashboardProps) => {
   const [selectedMonth, setSelectedMonth] = useState<string>(toMonthKey(new Date()));
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
+  // ✅ Dark mode
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return document.documentElement.classList.contains('dark') ||
+        localStorage.getItem('theme') === 'dark' ||
+        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -133,11 +154,7 @@ const Dashboard = ({ session }: DashboardProps) => {
   const handleTogglePaid = async (id: string) => {
     const t = transactions.find(t => t.id === id);
     if (!t) return;
-    const updated = {
-      ...t,
-      isPaid: !t.isPaid,
-      paidDate: !t.isPaid ? new Date().toISOString().split('T')[0] : undefined,
-    };
+    const updated = { ...t, isPaid: !t.isPaid, paidDate: !t.isPaid ? new Date().toISOString().split('T')[0] : undefined };
     const { error } = await supabase
       .from('transactions')
       .update({ is_paid: updated.isPaid, paid_date: updated.paidDate ?? null })
@@ -223,28 +240,60 @@ const Dashboard = ({ session }: DashboardProps) => {
 
       {/* Header */}
       <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
+
           {/* Logo */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center">
               <LayoutDashboard className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-base text-slate-900 dark:text-slate-100 tracking-tight">
+            <span className="font-bold text-base text-slate-900 dark:text-slate-100 tracking-tight hidden sm:block">
               WeekLeaks
             </span>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block truncate max-w-[180px]">
+          {/* ✅ Mobile-friendly action row */}
+          <div className="flex items-center gap-1.5">
+            {/* Email — desktop only */}
+            <span className="text-xs text-slate-500 dark:text-slate-400 hidden md:block truncate max-w-[160px]">
               {session.user.email}
             </span>
-            <NewTransactionDialog onAdd={handleAddTransaction} />
+
+            {/* Nova Transação — icon only on mobile, full on desktop */}
+            <NewTransactionDialog
+              onAdd={handleAddTransaction}
+              trigger={
+                <>
+                  {/* Mobile: icon only */}
+                  <Button size="sm" className="sm:hidden h-8 w-8 p-0 bg-violet-600 hover:bg-violet-700 rounded-lg">
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                  {/* Desktop: full label */}
+                  <Button size="sm" className="hidden sm:flex h-8 gap-1.5 bg-violet-600 hover:bg-violet-700 text-xs rounded-lg">
+                    <Plus className="w-3.5 h-3.5" />
+                    Nova Transação
+                  </Button>
+                </>
+              }
+            />
+
             <a href="/extrato">
-              <Button variant="outline" size="sm" className="text-xs h-8">
+              <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5">
                 Extrato
               </Button>
             </a>
+
+            {/* ✅ Dark mode toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setDarkMode(!darkMode)}
+              className="h-8 w-8 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              title={darkMode ? 'Modo claro' : 'Modo escuro'}
+            >
+              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </Button>
+
             <Button
               variant="ghost"
               size="icon"
@@ -258,11 +307,11 @@ const Dashboard = ({ session }: DashboardProps) => {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <main className="max-w-6xl mx-auto px-3 sm:px-6 py-5 space-y-5">
 
-        {/* Month Navigator */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        {/* Month Navigator + overdue pill */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="icon"
@@ -271,7 +320,8 @@ const Dashboard = ({ session }: DashboardProps) => {
             >
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <h1 className="text-lg font-semibold capitalize text-slate-900 dark:text-slate-100 w-44 text-center">
+            {/* ✅ FIX: lowercase via CSS to avoid "Março De 2026" */}
+            <h1 className="text-base font-semibold text-slate-900 dark:text-slate-100 w-36 sm:w-44 text-center" style={{ textTransform: 'lowercase', fontVariant: 'normal' }}>
               {formatMonthLabel(selectedMonth)}
             </h1>
             <Button
@@ -285,10 +335,10 @@ const Dashboard = ({ session }: DashboardProps) => {
           </div>
 
           {overdueTransactions.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-400 rounded-xl px-3 py-1.5">
-              <AlertTriangle className="w-3.5 h-3.5" />
-              <span className="text-xs font-medium">
-                {overdueTransactions.length} atrasado{overdueTransactions.length > 1 ? 's' : ''} · {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(overdueAmount)}
+            <div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-400 rounded-xl px-2.5 py-1.5 flex-shrink-0">
+              <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+              <span className="text-xs font-medium whitespace-nowrap">
+                {overdueTransactions.length} atrasado{overdueTransactions.length > 1 ? 's' : ''}
               </span>
             </div>
           )}
@@ -296,27 +346,12 @@ const Dashboard = ({ session }: DashboardProps) => {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <SummaryCard
-            title="A receber"
-            amount={totalToReceive}
-            icon={TrendingUp}
-            variant="income"
-            subtitle={`${incomeCount} receita${incomeCount !== 1 ? 's' : ''} pendente${incomeCount !== 1 ? 's' : ''}`}
-          />
-          <SummaryCard
-            title="A pagar"
-            amount={totalToPay}
-            icon={TrendingDown}
-            variant="expense"
-            subtitle={`${expenseCount} despesa${expenseCount !== 1 ? 's' : ''} pendente${expenseCount !== 1 ? 's' : ''}`}
-          />
-          <SummaryCard
-            title="Saldo líquido"
-            amount={netBalance}
-            icon={Wallet}
-            variant="balance"
-            subtitle="Estimativa do mês"
-          />
+          <SummaryCard title="A receber" amount={totalToReceive} icon={TrendingUp} variant="income"
+            subtitle={`${incomeCount} receita${incomeCount !== 1 ? 's' : ''} pendente${incomeCount !== 1 ? 's' : ''}`} />
+          <SummaryCard title="A pagar" amount={totalToPay} icon={TrendingDown} variant="expense"
+            subtitle={`${expenseCount} despesa${expenseCount !== 1 ? 's' : ''} pendente${expenseCount !== 1 ? 's' : ''}`} />
+          <SummaryCard title="Saldo líquido" amount={netBalance} icon={Wallet} variant="balance"
+            subtitle="Estimativa do mês" />
         </div>
 
         {loading ? (
@@ -329,15 +364,14 @@ const Dashboard = ({ session }: DashboardProps) => {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
-            {/* Pending Transactions — wider column */}
+            {/* Pending Transactions */}
             <div className="lg:col-span-3 space-y-3">
-              {/* Section header */}
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Pendentes
                 </h2>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[140px] h-7 text-xs rounded-lg border-slate-200 dark:border-slate-700">
+                  <SelectTrigger className="w-[130px] h-7 text-xs rounded-lg border-slate-200 dark:border-slate-700">
                     <SelectValue placeholder="Filtrar" />
                   </SelectTrigger>
                   <SelectContent>
@@ -349,7 +383,6 @@ const Dashboard = ({ session }: DashboardProps) => {
                 </Select>
               </div>
 
-              {/* Bulk toolbar */}
               {pendingTransactions.length > 0 && (
                 <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-2">
@@ -364,12 +397,7 @@ const Dashboard = ({ session }: DashboardProps) => {
                     </span>
                   </div>
                   {someSelected && (
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => setShowBulkDeleteConfirm(true)}
-                      className="h-6 text-xs gap-1 px-2.5"
-                    >
+                    <Button size="sm" variant="destructive" onClick={() => setShowBulkDeleteConfirm(true)} className="h-6 text-xs gap-1 px-2.5">
                       <Trash2 className="w-3 h-3" />
                       Excluir {selectedIds.size}
                     </Button>
@@ -377,7 +405,6 @@ const Dashboard = ({ session }: DashboardProps) => {
                 </div>
               )}
 
-              {/* Transaction list */}
               <div className="space-y-2">
                 {pendingTransactions.length > 0 ? (
                   pendingTransactions.map(transaction => (
@@ -396,10 +423,8 @@ const Dashboard = ({ session }: DashboardProps) => {
                     <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
                       <Plus className="w-5 h-5 text-slate-400" />
                     </div>
-                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                      Nenhuma transação pendente
-                    </p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 capitalize">
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Nenhuma transação pendente</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1" style={{ textTransform: 'lowercase' }}>
                       {formatMonthLabel(selectedMonth)}
                     </p>
                   </div>
@@ -407,7 +432,7 @@ const Dashboard = ({ session }: DashboardProps) => {
               </div>
             </div>
 
-            {/* Chart — narrower column */}
+            {/* Chart */}
             <div className="lg:col-span-2">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
                 Resumo
@@ -419,11 +444,7 @@ const Dashboard = ({ session }: DashboardProps) => {
       </main>
 
       {editingTransaction && (
-        <NewTransactionDialog
-          transaction={editingTransaction}
-          onEdit={handleEditTransaction}
-          trigger={<div />}
-        />
+        <NewTransactionDialog transaction={editingTransaction} onEdit={handleEditTransaction} trigger={<div />} />
       )}
 
       <DeleteConfirmationDialog
