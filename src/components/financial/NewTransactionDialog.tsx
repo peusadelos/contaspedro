@@ -51,16 +51,17 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
 
   const categories = type === 'expense' ? expenseCategories : incomeCategories;
 
-  useEffect(() => {
-    if (transaction) {
-      setType(transaction.type);
-      setDescription(transaction.description);
-      setAmount(transaction.amount.toString());
-      setDueDate(transaction.dueDate);
-      setCategory(transaction.category);
-      setIsPaid(transaction.isPaid);
-    }
-  }, [transaction]);
+ useEffect(() => {
+  if (transaction) {
+    setOpen(true);
+    setType(transaction.type);
+    setDescription(transaction.description);
+    setAmount(transaction.amount.toString());
+    setDueDate(transaction.dueDate);
+    setCategory(transaction.category);
+    setIsPaid(transaction.isPaid);
+  }
+}, [transaction]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
