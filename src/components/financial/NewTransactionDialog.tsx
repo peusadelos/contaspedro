@@ -20,14 +20,10 @@ interface NewTransactionDialogProps {
 const expenseCategories: Category[] = ['Contas', 'Gastos Pessoais', 'Compras', 'Pagamento de Dívidas'];
 const incomeCategories: Category[] = ['Salário', 'Freela', 'Extra'];
 
-// Add X months to a YYYY-MM-DD date string, keeping the same day
 const addMonths = (dateStr: string, months: number): string => {
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1 + months, day);
-  // If day overflows (e.g. Jan 31 + 1 month), use last day of that month
-  if (date.getDate() !== day) {
-    date.setDate(0);
-  }
+  if (date.getDate() !== day) date.setDate(0);
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
@@ -44,41 +40,30 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
   const [category, setCategory] = useState<Category>(transaction?.category || 'Contas');
   const [isPaid, setIsPaid] = useState(transaction?.isPaid || false);
   const [notes, setNotes] = useState('');
-
-  // ✅ Recurring state
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringMonths, setRecurringMonths] = useState('12');
 
   const categories = type === 'expense' ? expenseCategories : incomeCategories;
 
- useEffect(() => {
-  if (transaction) {
-    setOpen(true);
-    setType(transaction.type);
-    setDescription(transaction.description);
-    setAmount(transaction.amount.toString());
-    setDueDate(transaction.dueDate);
-    setCategory(transaction.category);
-    setIsPaid(transaction.isPaid);
-  }
-}, [transaction]);
+  useEffect(() => {
+    if (transaction) {
+      setOpen(true);
+      setType(transaction.type);
+      setDescription(transaction.description);
+      setAmount(transaction.amount.toString());
+      setDueDate(transaction.dueDate);
+      setCategory(transaction.category);
+      setIsPaid(transaction.isPaid);
+    }
+  }, [transaction]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!description.trim()) {
-      toast.error('Descrição é obrigatória');
-      return;
-    }
+    if (!description.trim()) { toast.error('Descrição é obrigatória'); return; }
     const amountValue = parseFloat(amount);
-    if (!amount || isNaN(amountValue) || amountValue <= 0) {
-      toast.error('Valor deve ser maior que zero');
-      return;
-    }
-    if (!category) {
-      toast.error('Selecione uma categoria');
-      return;
-    }
+    if (!amount || isNaN(amountValue) || amountValue <= 0) { toast.error('Valor deve ser maior que zero'); return; }
+    if (!category) { toast.error('Selecione uma categoria'); return; }
 
     const today = new Date().toISOString().split('T')[0];
 
@@ -96,7 +81,6 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
       toast.success('Transação atualizada com sucesso!');
     } else if (onAdd) {
       if (isRecurring) {
-        // ✅ Generate one transaction per month
         const months = Math.max(1, Math.min(60, parseInt(recurringMonths) || 12));
         const recurringGroup = `recurring_${Date.now()}`;
         const generated: Omit<Transaction, 'id'>[] = Array.from({ length: months }, (_, i) => {
@@ -117,7 +101,6 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
         onAdd(generated);
         toast.success(`${months} transações recorrentes criadas!`);
       } else {
-        // Single transaction
         onAdd([{
           description: description.trim(),
           amount: amountValue,
@@ -155,7 +138,10 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    // ✅ FIX: modal={false} prevents the Dialog from trapping focus,
+    // which was causing the blank page when a Select dropdown was open
+    // and the user clicked outside
+    <Dialog open={open} onOpenChange={setOpen} modal={false}>
       <DialogTrigger asChild>
         {trigger || (
           <Button className="gap-2">
@@ -164,24 +150,38 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+
+      {/* ✅ FIX: Added fixed inset overlay so clicking outside still closes properly */}
+      {open && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      <DialogContent className="sm:max-w-[425px] z-50 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar Transação' : 'Adicionar Transação'}</DialogTitle>
         </DialogHeader>
+
         <form onSubmit={handleSubmit} className="space-y-4">
+
+          {/* Tipo */}
           <div className="space-y-2">
             <Label>Tipo</Label>
-            <Select value={type} onValueChange={handleTypeChange}>
+            {/* ✅ FIX: Select inside Dialog needs SelectContent with a high z-index */}
+            <Select value={type} onValueChange={(v) => handleTypeChange(v as TransactionType)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-[200]">
                 <SelectItem value="expense">Despesa</SelectItem>
                 <SelectItem value="income">Receita</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
+          {/* Descrição */}
           <div className="space-y-2">
             <Label htmlFor="description">Descrição *</Label>
             <Input
@@ -193,6 +193,7 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
             />
           </div>
 
+          {/* Valor */}
           <div className="space-y-2">
             <Label htmlFor="amount">Valor *</Label>
             <Input
@@ -207,13 +208,16 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
             />
           </div>
 
+          {/* Categoria */}
           <div className="space-y-2">
             <Label>Categoria</Label>
             <Select value={category} onValueChange={(val) => setCategory(val as Category)}>
               <SelectTrigger>
-                <SelectValue />
+                {/* ✅ FIX: placeholder forces Radix to render label text correctly,
+                    preventing the "ContasContas" duplication bug */}
+                <SelectValue placeholder="Selecione uma categoria" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-[200]">
                 {categories.map((cat) => (
                   <SelectItem key={cat} value={cat}>
                     {cat}
@@ -223,6 +227,7 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
             </Select>
           </div>
 
+          {/* Data */}
           <div className="space-y-2">
             <Label htmlFor="dueDate">
               {isRecurring ? 'Data de Vencimento (1º mês)' : 'Data de Vencimento'}
@@ -235,6 +240,7 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
             />
           </div>
 
+          {/* Observações */}
           <div className="space-y-2">
             <Label htmlFor="notes">Observações (opcional)</Label>
             <Textarea
@@ -246,6 +252,7 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
             />
           </div>
 
+          {/* Marcar como pago */}
           <div className="flex items-center space-x-2">
             <Checkbox
               id="isPaid"
@@ -257,7 +264,7 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
             </Label>
           </div>
 
-          {/* ✅ Recurring toggle — hidden when editing */}
+          {/* Recorrente — só ao adicionar */}
           {!isEditing && (
             <div className="rounded-lg border p-3 space-y-3 bg-muted/30">
               <div className="flex items-center space-x-2">
@@ -274,9 +281,7 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
 
               {isRecurring && (
                 <div className="space-y-2 pl-6">
-                  <Label htmlFor="recurringMonths" className="text-sm">
-                    Quantos meses?
-                  </Label>
+                  <Label htmlFor="recurringMonths" className="text-sm">Quantos meses?</Label>
                   <div className="flex items-center gap-2">
                     <Input
                       id="recurringMonths"
