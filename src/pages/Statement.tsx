@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Transaction, TransactionType, Category } from '@/types/financial';
 import { mockTransactions } from '@/data/mockTransactions';
 import { NewTransactionDialog } from '@/components/financial/NewTransactionDialog';
@@ -15,7 +15,16 @@ import { getTransactionStatus, getStatusLabel, getStatusBadgeVariant, getDaysOve
 import { toast } from 'sonner';
 
 const Statement = () => {
-  const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
+  // ✅ Use localStorage (same data as Dashboard)
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    try {
+      const saved = localStorage.getItem('contaspedro_transactions');
+      return saved ? JSON.parse(saved) : mockTransactions;
+    } catch {
+      return mockTransactions;
+    }
+  });
+
   const [filterMonth, setFilterMonth] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
@@ -23,12 +32,18 @@ const Statement = () => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>(undefined);
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
 
-  const handleAddTransaction = (newTransaction: Omit<Transaction, 'id'>) => {
-    const transaction: Transaction = {
-      ...newTransaction,
-      id: `txn_${Date.now()}`,
-    };
-    setTransactions([transaction, ...transactions]);
+  // ✅ Sync to localStorage on every change
+  useEffect(() => {
+    localStorage.setItem('contaspedro_transactions', JSON.stringify(transactions));
+  }, [transactions]);
+
+  // ✅ onAdd now receives an array (supports recurring)
+  const handleAddTransaction = (newTransactions: Omit<Transaction, 'id'>[]) => {
+    const withIds: Transaction[] = newTransactions.map((t, i) => ({
+      ...t,
+      id: `txn_${Date.now()}_${i}`,
+    }));
+    setTransactions(prev => [...withIds, ...prev]);
   };
 
   const handleEditTransaction = (transaction: Transaction) => {
@@ -56,24 +71,14 @@ const Statement = () => {
 
   const allCategories = Array.from(new Set(transactions.map(t => t.category)));
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('pt-BR');
-  };
+  const formatDate = (date: string) =>
+    new Date(date).toLocaleDateString('pt-BR');
 
-  const formatDateTime = (date: string) => {
-    return new Date(date).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  };
+  const formatDateTime = (date: string) =>
+    new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   return (
     <div className="min-h-screen bg-background">
@@ -96,19 +101,12 @@ const Statement = () => {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Mês</label>
-            <Input
-              type="month"
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(e.target.value)}
-            />
+            <Input type="month" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} />
           </div>
-
           <div className="space-y-2">
             <label className="text-sm font-medium">Categoria</label>
             <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todas" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas</SelectItem>
                 {allCategories.map(cat => (
@@ -117,13 +115,10 @@ const Statement = () => {
               </SelectContent>
             </Select>
           </div>
-
           <div className="space-y-2">
             <label className="text-sm font-medium">Tipo</label>
             <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="income">Receita</SelectItem>
@@ -131,13 +126,10 @@ const Statement = () => {
               </SelectContent>
             </Select>
           </div>
-
           <div className="space-y-2">
             <label className="text-sm font-medium">Status</label>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="paid">🟢 Quitado</SelectItem>
@@ -147,16 +139,10 @@ const Statement = () => {
               </SelectContent>
             </Select>
           </div>
-
           <div className="flex items-end">
             <Button
               variant="outline"
-              onClick={() => {
-                setFilterMonth('');
-                setFilterCategory('all');
-                setFilterType('all');
-                setFilterStatus('all');
-              }}
+              onClick={() => { setFilterMonth(''); setFilterCategory('all'); setFilterType('all'); setFilterStatus('all'); }}
               className="w-full"
             >
               Limpar Filtros
@@ -184,13 +170,10 @@ const Statement = () => {
                 filteredTransactions.map((transaction) => {
                   const status = getTransactionStatus(transaction);
                   const daysOverdue = getDaysOverdue(transaction);
-                  
                   return (
-                    <TableRow 
+                    <TableRow
                       key={transaction.id}
-                      className={cn(
-                        status === 'overdue' && "bg-red-50/50 dark:bg-red-950/10"
-                      )}
+                      className={cn(status === 'overdue' && "bg-red-50/50 dark:bg-red-950/10")}
                     >
                       <TableCell>
                         <div className="space-y-1">
@@ -202,10 +185,16 @@ const Statement = () => {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="font-medium">{transaction.description}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{transaction.category}</Badge>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-1">
+                          {transaction.description}
+                          {/* ✅ Small badge for recurring transactions */}
+                          {(transaction as any).recurringGroup && (
+                            <span className="text-xs text-muted-foreground bg-muted px-1 rounded" title="Transação recorrente">↺</span>
+                          )}
+                        </div>
                       </TableCell>
+                      <TableCell><Badge variant="outline">{transaction.category}</Badge></TableCell>
                       <TableCell>
                         <Badge
                           variant={transaction.type === 'income' ? 'default' : 'secondary'}
@@ -224,31 +213,17 @@ const Statement = () => {
                         {transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Badge variant={getStatusBadgeVariant(status)}>
-                          {getStatusLabel(status)}
-                        </Badge>
+                        <Badge variant={getStatusBadgeVariant(status)}>{getStatusLabel(status)}</Badge>
                       </TableCell>
                       <TableCell className="text-right text-sm text-muted-foreground">
                         {transaction.paidDate ? formatDateTime(transaction.paidDate) : '-'}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setEditingTransaction(transaction)}
-                            className="h-8 w-8 p-0"
-                            title="Editar transação"
-                          >
+                          <Button size="sm" variant="ghost" onClick={() => setEditingTransaction(transaction)} className="h-8 w-8 p-0" title="Editar">
                             <Pencil className="w-4 h-4" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setDeletingTransaction(transaction)}
-                            className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            title="Excluir transação"
-                          >
+                          <Button size="sm" variant="ghost" onClick={() => setDeletingTransaction(transaction)} className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10" title="Excluir">
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
@@ -272,33 +247,21 @@ const Statement = () => {
           <div className="p-4 border rounded-lg bg-income-light border-income">
             <p className="text-sm text-muted-foreground mb-1">Total Receitas</p>
             <p className="text-2xl font-bold text-income">
-              {formatCurrency(
-                filteredTransactions
-                  .filter(t => t.type === 'income')
-                  .reduce((sum, t) => sum + t.amount, 0)
-              )}
+              {formatCurrency(filteredTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0))}
             </p>
           </div>
           <div className="p-4 border rounded-lg bg-expense-light border-expense">
             <p className="text-sm text-muted-foreground mb-1">Total Despesas</p>
             <p className="text-2xl font-bold text-expense">
-              {formatCurrency(
-                filteredTransactions
-                  .filter(t => t.type === 'expense')
-                  .reduce((sum, t) => sum + t.amount, 0)
-              )}
+              {formatCurrency(filteredTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0))}
             </p>
           </div>
           <div className="p-4 border rounded-lg bg-gradient-to-br from-primary to-primary/80 text-primary-foreground">
             <p className="text-sm text-primary-foreground/80 mb-1">Saldo</p>
             <p className="text-2xl font-bold">
               {formatCurrency(
-                filteredTransactions
-                  .filter(t => t.type === 'income')
-                  .reduce((sum, t) => sum + t.amount, 0) -
-                filteredTransactions
-                  .filter(t => t.type === 'expense')
-                  .reduce((sum, t) => sum + t.amount, 0)
+                filteredTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) -
+                filteredTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
               )}
             </p>
           </div>

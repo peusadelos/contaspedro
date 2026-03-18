@@ -12,14 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { getTransactionStatus } from '@/lib/financialUtils';
 
-// Helper: get YYYY-MM string for a given date
 const toMonthKey = (date: Date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   return `${y}-${m}`;
 };
 
-// Helper: format YYYY-MM to "março 2026"
 const formatMonthLabel = (monthKey: string) => {
   const [year, month] = monthKey.split('-');
   const date = new Date(Number(year), Number(month) - 1, 1);
@@ -27,7 +25,6 @@ const formatMonthLabel = (monthKey: string) => {
 };
 
 const Dashboard = () => {
-  // Load from localStorage on startup, fall back to mockTransactions
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     try {
       const saved = localStorage.getItem('contaspedro_transactions');
@@ -40,30 +37,25 @@ const Dashboard = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>(undefined);
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
-
-  // ✅ FEATURE: Month filter — default to current month
   const [selectedMonth, setSelectedMonth] = useState<string>(toMonthKey(new Date()));
-
-  // ✅ FEATURE: Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
-  // Save to localStorage whenever transactions change
   useEffect(() => {
     localStorage.setItem('contaspedro_transactions', JSON.stringify(transactions));
   }, [transactions]);
 
-  // Clear selection when month or filter changes
   useEffect(() => {
     setSelectedIds(new Set());
   }, [selectedMonth, statusFilter]);
 
-  const handleAddTransaction = (transaction: Omit<Transaction, 'id'>) => {
-    const newTransaction: Transaction = {
-      ...transaction,
-      id: `txn_${Date.now()}`,
-    };
-    setTransactions(prev => [newTransaction, ...prev]);
+  // ✅ onAdd now receives an array (supports both single and recurring)
+  const handleAddTransaction = (newTransactions: Omit<Transaction, 'id'>[]) => {
+    const withIds: Transaction[] = newTransactions.map((t, i) => ({
+      ...t,
+      id: `txn_${Date.now()}_${i}`,
+    }));
+    setTransactions(prev => [...withIds, ...prev]);
   };
 
   const handleEditTransaction = (transaction: Transaction) => {
@@ -92,7 +84,6 @@ const Dashboard = () => {
     toast.success('Status atualizado!');
   };
 
-  // ✅ Bulk selection handlers
   const handleToggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -116,21 +107,18 @@ const Dashboard = () => {
     setShowBulkDeleteConfirm(false);
   };
 
-  // ✅ Clear demo data
   const handleClearDemoData = () => {
     setTransactions([]);
     setSelectedIds(new Set());
     toast.success('Dados de demonstração removidos!');
   };
 
-  // ✅ Month navigation
   const navigateMonth = (direction: 'prev' | 'next') => {
     const [year, month] = selectedMonth.split('-').map(Number);
     const date = new Date(year, month - 1 + (direction === 'next' ? 1 : -1), 1);
     setSelectedMonth(toMonthKey(date));
   };
 
-  // Filter transactions by selected month
   const transactionsInMonth = transactions.filter(t =>
     t.dueDate.startsWith(selectedMonth)
   );
@@ -170,8 +158,6 @@ const Dashboard = () => {
 
   const allSelected = pendingTransactions.length > 0 && selectedIds.size === pendingTransactions.length;
   const someSelected = selectedIds.size > 0;
-
-  // Only show "Limpar Demo" if demo data is still present (id '1' is from mockTransactions)
   const hasDemoData = transactions.some(t => t.id === '1');
 
   return (
@@ -180,7 +166,6 @@ const Dashboard = () => {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <h1 className="text-2xl font-bold text-foreground">Controle Financeiro</h1>
           <div className="flex items-center gap-2">
-            {/* ✅ Clear demo data button — only shown while demo data exists */}
             {hasDemoData && (
               <Button
                 variant="outline"
@@ -202,7 +187,7 @@ const Dashboard = () => {
 
       <main className="container mx-auto px-4 py-8 space-y-8">
 
-        {/* ✅ Month Navigator */}
+        {/* Month Navigator */}
         <div className="flex items-center justify-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigateMonth('prev')}>
             <ChevronLeft className="w-5 h-5" />
@@ -217,38 +202,18 @@ const Dashboard = () => {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <SummaryCard
-            title="Total a Receber"
-            amount={totalToReceive}
-            icon={TrendingUp}
-            variant="income"
-          />
-          <SummaryCard
-            title="Total a Pagar"
-            amount={totalToPay}
-            icon={TrendingDown}
-            variant="expense"
-          />
-          <SummaryCard
-            title="Saldo Líquido"
-            amount={netBalance}
-            icon={Wallet}
-            variant="balance"
-          />
+          <SummaryCard title="Total a Receber" amount={totalToReceive} icon={TrendingUp} variant="income" />
+          <SummaryCard title="Total a Pagar" amount={totalToPay} icon={TrendingDown} variant="expense" />
+          <SummaryCard title="Saldo Líquido" amount={netBalance} icon={Wallet} variant="balance" />
           {overdueTransactions.length > 0 && (
             <div className="p-6 rounded-lg bg-gradient-to-br from-red-500 to-red-600 text-white shadow-lg border-2 border-red-400">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-medium text-red-50">Atrasados</p>
                 <AlertTriangle className="w-5 h-5 text-red-100" />
               </div>
-              <p className="text-3xl font-bold mb-1">
-                {overdueTransactions.length}
-              </p>
+              <p className="text-3xl font-bold mb-1">{overdueTransactions.length}</p>
               <p className="text-sm text-red-100">
-                {new Intl.NumberFormat('pt-BR', {
-                  style: 'currency',
-                  currency: 'BRL',
-                }).format(overdueAmount)}
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(overdueAmount)}
               </p>
             </div>
           )}
@@ -256,7 +221,6 @@ const Dashboard = () => {
 
         {/* Pending Transactions and Chart */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Pending Transactions */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Transações Pendentes</h2>
@@ -273,7 +237,6 @@ const Dashboard = () => {
               </Select>
             </div>
 
-            {/* ✅ Bulk action toolbar */}
             {pendingTransactions.length > 0 && (
               <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 border">
                 <div className="flex items-center gap-2">
@@ -322,7 +285,6 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Category Chart */}
           <CategoryChart data={expensesByCategory} />
         </div>
       </main>
@@ -342,7 +304,6 @@ const Dashboard = () => {
         onConfirm={handleDeleteTransaction}
       />
 
-      {/* ✅ Bulk delete confirmation */}
       <DeleteConfirmationDialog
         open={showBulkDeleteConfirm}
         onOpenChange={(open) => !open && setShowBulkDeleteConfirm(false)}
