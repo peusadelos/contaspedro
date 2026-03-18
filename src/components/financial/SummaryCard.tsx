@@ -1,4 +1,3 @@
-import { Card } from '@/components/ui/card';
 import { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -7,52 +6,64 @@ interface SummaryCardProps {
   amount: number;
   icon: LucideIcon;
   variant: 'income' | 'expense' | 'balance';
+  subtitle?: string;
 }
 
-export const SummaryCard = ({ title, amount, icon: Icon, variant }: SummaryCardProps) => {
+export const SummaryCard = ({ title, amount, icon: Icon, variant, subtitle }: SummaryCardProps) => {
   const formattedAmount = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   }).format(Math.abs(amount));
 
+  const config = {
+    income: {
+      bg: 'bg-emerald-50 dark:bg-emerald-950/30',
+      border: 'border-emerald-200 dark:border-emerald-800/50',
+      iconBg: 'bg-emerald-100 dark:bg-emerald-900/50',
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
+      label: 'text-emerald-700 dark:text-emerald-400',
+      amount: 'text-emerald-800 dark:text-emerald-300',
+      sub: 'text-emerald-600/70 dark:text-emerald-500/70',
+    },
+    expense: {
+      bg: 'bg-rose-50 dark:bg-rose-950/30',
+      border: 'border-rose-200 dark:border-rose-800/50',
+      iconBg: 'bg-rose-100 dark:bg-rose-900/50',
+      iconColor: 'text-rose-600 dark:text-rose-400',
+      label: 'text-rose-700 dark:text-rose-400',
+      amount: 'text-rose-800 dark:text-rose-300',
+      sub: 'text-rose-600/70 dark:text-rose-500/70',
+    },
+    balance: {
+      bg: 'bg-violet-50 dark:bg-violet-950/30',
+      border: 'border-violet-200 dark:border-violet-800/50',
+      iconBg: 'bg-violet-100 dark:bg-violet-900/50',
+      iconColor: 'text-violet-600 dark:text-violet-400',
+      label: 'text-violet-700 dark:text-violet-400',
+      amount: 'text-violet-800 dark:text-violet-300',
+      sub: 'text-violet-600/70 dark:text-violet-500/70',
+    },
+  }[variant];
+
   return (
-    <Card className={cn(
-      "p-6 transition-all duration-300 hover:shadow-lg",
-      variant === 'income' && "bg-income-light border-income",
-      variant === 'expense' && "bg-expense-light border-expense",
-      variant === 'balance' && "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground border-primary"
+    <div className={cn(
+      'rounded-2xl border p-5 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5',
+      config.bg, config.border
     )}>
-      <div className="flex items-start justify-between">
-        <div className="space-y-2 flex-1">
-          <p className={cn(
-            "text-sm font-medium",
-            variant === 'balance' ? "text-primary-foreground/80" : "text-muted-foreground"
-          )}>
-            {title}
-          </p>
-          <p className={cn(
-            "text-3xl font-bold",
-            variant === 'income' && "text-income",
-            variant === 'expense' && "text-expense",
-            variant === 'balance' && "text-primary-foreground"
-          )}>
-            {variant === 'expense' && amount > 0 ? '-' : ''}{formattedAmount}
-          </p>
-        </div>
-        <div className={cn(
-          "p-3 rounded-xl",
-          variant === 'income' && "bg-income/10",
-          variant === 'expense' && "bg-expense/10",
-          variant === 'balance' && "bg-primary-foreground/10"
-        )}>
-          <Icon className={cn(
-            "w-6 h-6",
-            variant === 'income' && "text-income",
-            variant === 'expense' && "text-expense",
-            variant === 'balance' && "text-primary-foreground"
-          )} />
+      <div className="flex items-start justify-between mb-3">
+        <p className={cn('text-xs font-semibold uppercase tracking-wider', config.label)}>
+          {title}
+        </p>
+        <div className={cn('p-2 rounded-xl', config.iconBg)}>
+          <Icon className={cn('w-4 h-4', config.iconColor)} />
         </div>
       </div>
-    </Card>
+      <p className={cn('text-2xl font-bold tracking-tight', config.amount)}>
+        {variant === 'expense' && amount > 0 ? '−' : ''}{formattedAmount}
+      </p>
+      {subtitle && (
+        <p className={cn('text-xs mt-1.5', config.sub)}>{subtitle}</p>
+      )}
+    </div>
   );
 };
