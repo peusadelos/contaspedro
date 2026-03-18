@@ -7,13 +7,16 @@ import { TransactionItem } from '@/components/financial/TransactionItem';
 import { CategoryChart } from '@/components/financial/CategoryChart';
 import { NewTransactionDialog } from '@/components/financial/NewTransactionDialog';
 import { DeleteConfirmationDialog } from '@/components/financial/DeleteConfirmationDialog';
-import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Trash2, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import {
+  TrendingUp, TrendingDown, Wallet, AlertTriangle,
+  Trash2, ChevronLeft, ChevronRight, LogOut, Plus,
+  LayoutDashboard
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { getTransactionStatus } from '@/lib/financialUtils';
 
-// --- Helpers ---
 const toMonthKey = (date: Date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -26,7 +29,6 @@ const formatMonthLabel = (monthKey: string) => {
   return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 };
 
-// Convert Supabase row → app Transaction
 const fromSupabase = (row: SupabaseTransaction): Transaction => ({
   id: row.id,
   description: row.description,
@@ -41,7 +43,6 @@ const fromSupabase = (row: SupabaseTransaction): Transaction => ({
   recurringGroup: row.recurring_group ?? undefined,
 });
 
-// Convert app Transaction → Supabase row
 const toSupabase = (t: Omit<Transaction, 'id'>, userId: string) => ({
   user_id: userId,
   description: t.description,
@@ -56,7 +57,6 @@ const toSupabase = (t: Omit<Transaction, 'id'>, userId: string) => ({
   recurring_group: (t as any).recurringGroup ?? null,
 });
 
-// --- Component ---
 interface DashboardProps {
   session: Session;
 }
@@ -71,7 +71,6 @@ const Dashboard = ({ session }: DashboardProps) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
-  // Load transactions from Supabase on mount
   useEffect(() => {
     const fetchTransactions = async () => {
       setLoading(true);
@@ -79,7 +78,6 @@ const Dashboard = ({ session }: DashboardProps) => {
         .from('transactions')
         .select('*')
         .order('due_date', { ascending: false });
-
       if (error) {
         toast.error('Erro ao carregar transações');
       } else {
@@ -87,7 +85,6 @@ const Dashboard = ({ session }: DashboardProps) => {
       }
       setLoading(false);
     };
-
     fetchTransactions();
   }, []);
 
@@ -103,6 +100,7 @@ const Dashboard = ({ session }: DashboardProps) => {
     } else {
       const added = (data as SupabaseTransaction[]).map(fromSupabase);
       setTransactions(prev => [...added, ...prev]);
+      toast.success(added.length > 1 ? `${added.length} transações criadas!` : 'Transação adicionada!');
     }
   };
 
@@ -111,7 +109,6 @@ const Dashboard = ({ session }: DashboardProps) => {
       .from('transactions')
       .update(toSupabase(transaction, session.user.id))
       .eq('id', transaction.id);
-
     if (error) {
       toast.error('Erro ao editar transação');
     } else {
@@ -123,11 +120,7 @@ const Dashboard = ({ session }: DashboardProps) => {
 
   const handleDeleteTransaction = async () => {
     if (!deletingTransaction) return;
-    const { error } = await supabase
-      .from('transactions')
-      .delete()
-      .eq('id', deletingTransaction.id);
-
+    const { error } = await supabase.from('transactions').delete().eq('id', deletingTransaction.id);
     if (error) {
       toast.error('Erro ao excluir transação');
     } else {
@@ -140,18 +133,15 @@ const Dashboard = ({ session }: DashboardProps) => {
   const handleTogglePaid = async (id: string) => {
     const t = transactions.find(t => t.id === id);
     if (!t) return;
-
     const updated = {
       ...t,
       isPaid: !t.isPaid,
       paidDate: !t.isPaid ? new Date().toISOString().split('T')[0] : undefined,
     };
-
     const { error } = await supabase
       .from('transactions')
       .update({ is_paid: updated.isPaid, paid_date: updated.paidDate ?? null })
       .eq('id', id);
-
     if (error) {
       toast.error('Erro ao atualizar status');
     } else {
@@ -200,7 +190,6 @@ const Dashboard = ({ session }: DashboardProps) => {
   };
 
   const transactionsInMonth = transactions.filter(t => t.dueDate.startsWith(selectedMonth));
-
   const totalToReceive = transactionsInMonth.filter(t => t.type === 'income' && !t.isPaid).reduce((sum, t) => sum + t.amount, 0);
   const totalToPay = transactionsInMonth.filter(t => t.type === 'expense' && !t.isPaid).reduce((sum, t) => sum + t.amount, 0);
   const netBalance = totalToReceive - totalToPay;
@@ -226,127 +215,206 @@ const Dashboard = ({ session }: DashboardProps) => {
 
   const allSelected = pendingTransactions.length > 0 && selectedIds.size === pendingTransactions.length;
   const someSelected = selectedIds.size > 0;
+  const incomeCount = transactionsInMonth.filter(t => t.type === 'income' && !t.isPaid).length;
+  const expenseCount = transactionsInMonth.filter(t => t.type === 'expense' && !t.isPaid).length;
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card sticky top-0 z-10 shadow-sm">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-bold text-foreground">WeekLeaks</h1>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+
+      {/* Header */}
+      <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+          {/* Logo */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center flex-shrink-0">
+              <LayoutDashboard className="w-4 h-4 text-white" />
+            </div>
+            <span className="font-bold text-base text-slate-900 dark:text-slate-100 tracking-tight">
+              WeekLeaks
+            </span>
+          </div>
+
+          {/* Actions */}
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground hidden sm:block">{session.user.email}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block truncate max-w-[180px]">
+              {session.user.email}
+            </span>
             <NewTransactionDialog onAdd={handleAddTransaction} />
             <a href="/extrato">
-              <Button variant="outline">Ver Extrato</Button>
+              <Button variant="outline" size="sm" className="text-xs h-8">
+                Extrato
+              </Button>
             </a>
-            <Button variant="ghost" size="icon" onClick={handleLogout} title="Sair">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+              className="h-8 w-8 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              title="Sair"
+            >
               <LogOut className="w-4 h-4" />
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 space-y-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {/* Month Navigator */}
-        <div className="flex items-center justify-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigateMonth('prev')}>
-            <ChevronLeft className="w-5 h-5" />
-          </Button>
-          <h2 className="text-lg font-semibold capitalize w-48 text-center">
-            {formatMonthLabel(selectedMonth)}
-          </h2>
-          <Button variant="ghost" size="icon" onClick={() => navigateMonth('next')}>
-            <ChevronRight className="w-5 h-5" />
-          </Button>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigateMonth('prev')}
+              className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <h1 className="text-lg font-semibold capitalize text-slate-900 dark:text-slate-100 w-44 text-center">
+              {formatMonthLabel(selectedMonth)}
+            </h1>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigateMonth('next')}
+              className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {overdueTransactions.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-400 rounded-xl px-3 py-1.5">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span className="text-xs font-medium">
+                {overdueTransactions.length} atrasado{overdueTransactions.length > 1 ? 's' : ''} · {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(overdueAmount)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <SummaryCard
+            title="A receber"
+            amount={totalToReceive}
+            icon={TrendingUp}
+            variant="income"
+            subtitle={`${incomeCount} receita${incomeCount !== 1 ? 's' : ''} pendente${incomeCount !== 1 ? 's' : ''}`}
+          />
+          <SummaryCard
+            title="A pagar"
+            amount={totalToPay}
+            icon={TrendingDown}
+            variant="expense"
+            subtitle={`${expenseCount} despesa${expenseCount !== 1 ? 's' : ''} pendente${expenseCount !== 1 ? 's' : ''}`}
+          />
+          <SummaryCard
+            title="Saldo líquido"
+            amount={netBalance}
+            icon={Wallet}
+            variant="balance"
+            subtitle="Estimativa do mês"
+          />
         </div>
 
         {loading ? (
-          <div className="text-center py-20 text-muted-foreground">Carregando transações...</div>
-        ) : (
-          <>
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <SummaryCard title="Total a Receber" amount={totalToReceive} icon={TrendingUp} variant="income" />
-              <SummaryCard title="Total a Pagar" amount={totalToPay} icon={TrendingDown} variant="expense" />
-              <SummaryCard title="Saldo Líquido" amount={netBalance} icon={Wallet} variant="balance" />
-              {overdueTransactions.length > 0 && (
-                <div className="p-6 rounded-lg bg-gradient-to-br from-red-500 to-red-600 text-white shadow-lg border-2 border-red-400">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-medium text-red-50">Atrasados</p>
-                    <AlertTriangle className="w-5 h-5 text-red-100" />
-                  </div>
-                  <p className="text-3xl font-bold mb-1">{overdueTransactions.length}</p>
-                  <p className="text-sm text-red-100">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(overdueAmount)}
-                  </p>
-                </div>
-              )}
+          <div className="flex items-center justify-center py-24">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 rounded-full border-2 border-violet-600 border-t-transparent animate-spin" />
+              <p className="text-sm text-slate-500">Carregando transações...</p>
             </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
-            {/* Pending Transactions and Chart */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold">Transações Pendentes</h2>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Filtrar status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="overdue">🔴 Atrasados</SelectItem>
-                      <SelectItem value="pending">🟡 Pendentes</SelectItem>
-                      <SelectItem value="future">🔵 Futuros</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {pendingTransactions.length > 0 && (
-                  <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 border">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={allSelected}
-                        onChange={handleSelectAll}
-                        className="w-4 h-4 cursor-pointer accent-primary"
-                      />
-                      <span className="text-sm text-muted-foreground">
-                        {someSelected ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}
-                      </span>
-                    </div>
-                    {someSelected && (
-                      <Button size="sm" variant="destructive" onClick={() => setShowBulkDeleteConfirm(true)} className="gap-1">
-                        <Trash2 className="w-4 h-4" />
-                        Excluir {selectedIds.size}
-                      </Button>
-                    )}
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  {pendingTransactions.length > 0 ? (
-                    pendingTransactions.map(transaction => (
-                      <TransactionItem
-                        key={transaction.id}
-                        transaction={transaction}
-                        onTogglePaid={handleTogglePaid}
-                        onEdit={setEditingTransaction}
-                        onDelete={setDeletingTransaction}
-                        isSelected={selectedIds.has(transaction.id)}
-                        onToggleSelect={handleToggleSelect}
-                      />
-                    ))
-                  ) : (
-                    <p className="text-center text-muted-foreground py-8">
-                      Nenhuma transação pendente em {formatMonthLabel(selectedMonth)}
-                    </p>
-                  )}
-                </div>
+            {/* Pending Transactions — wider column */}
+            <div className="lg:col-span-3 space-y-3">
+              {/* Section header */}
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Pendentes
+                </h2>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[140px] h-7 text-xs rounded-lg border-slate-200 dark:border-slate-700">
+                    <SelectValue placeholder="Filtrar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="overdue">🔴 Atrasados</SelectItem>
+                    <SelectItem value="pending">🟡 Pendentes</SelectItem>
+                    <SelectItem value="future">🔵 Futuros</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
+              {/* Bulk toolbar */}
+              {pendingTransactions.length > 0 && (
+                <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={handleSelectAll}
+                      className="w-4 h-4 cursor-pointer accent-violet-600"
+                    />
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      {someSelected ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}
+                    </span>
+                  </div>
+                  {someSelected && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => setShowBulkDeleteConfirm(true)}
+                      className="h-6 text-xs gap-1 px-2.5"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Excluir {selectedIds.size}
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Transaction list */}
+              <div className="space-y-2">
+                {pendingTransactions.length > 0 ? (
+                  pendingTransactions.map(transaction => (
+                    <TransactionItem
+                      key={transaction.id}
+                      transaction={transaction}
+                      onTogglePaid={handleTogglePaid}
+                      onEdit={setEditingTransaction}
+                      onDelete={setDeletingTransaction}
+                      isSelected={selectedIds.has(transaction.id)}
+                      onToggleSelect={handleToggleSelect}
+                    />
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                      <Plus className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                      Nenhuma transação pendente
+                    </p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 capitalize">
+                      {formatMonthLabel(selectedMonth)}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Chart — narrower column */}
+            <div className="lg:col-span-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+                Resumo
+              </h2>
               <CategoryChart data={expensesByCategory} />
             </div>
-          </>
+          </div>
         )}
       </main>
 
