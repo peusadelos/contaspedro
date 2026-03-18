@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
+import { Session } from '@supabase/supabase-js';
 import { Transaction, CategorySummary } from '@/types/financial';
-import { mockTransactions } from '@/data/mockTransactions';
+import { supabase, SupabaseTransaction } from '@/lib/supabase';
 import { SummaryCard } from '@/components/financial/SummaryCard';
 import { TransactionItem } from '@/components/financial/TransactionItem';
 import { CategoryChart } from '@/components/financial/CategoryChart';
 import { NewTransactionDialog } from '@/components/financial/NewTransactionDialog';
 import { DeleteConfirmationDialog } from '@/components/financial/DeleteConfirmationDialog';
-import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, AlertTriangle, Trash2, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { getTransactionStatus } from '@/lib/financialUtils';
 
+// --- Helpers ---
 const toMonthKey = (date: Date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -24,16 +26,44 @@ const formatMonthLabel = (monthKey: string) => {
   return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 };
 
-const Dashboard = () => {
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    try {
-      const saved = localStorage.getItem('contaspedro_transactions');
-      return saved ? JSON.parse(saved) : mockTransactions;
-    } catch {
-      return mockTransactions;
-    }
-  });
+// Convert Supabase row → app Transaction
+const fromSupabase = (row: SupabaseTransaction): Transaction => ({
+  id: row.id,
+  description: row.description,
+  amount: row.amount,
+  date: row.date,
+  createdDate: row.created_date,
+  dueDate: row.due_date,
+  paidDate: row.paid_date ?? undefined,
+  category: row.category as Transaction['category'],
+  type: row.type as Transaction['type'],
+  isPaid: row.is_paid,
+  recurringGroup: row.recurring_group ?? undefined,
+});
 
+// Convert app Transaction → Supabase row
+const toSupabase = (t: Omit<Transaction, 'id'>, userId: string) => ({
+  user_id: userId,
+  description: t.description,
+  amount: t.amount,
+  date: t.date,
+  created_date: t.createdDate,
+  due_date: t.dueDate,
+  paid_date: t.paidDate ?? null,
+  category: t.category,
+  type: t.type,
+  is_paid: t.isPaid,
+  recurring_group: (t as any).recurringGroup ?? null,
+});
+
+// --- Component ---
+interface DashboardProps {
+  session: Session;
+}
+
+const Dashboard = ({ session }: DashboardProps) => {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>(undefined);
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
@@ -41,47 +71,93 @@ const Dashboard = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
+  // Load transactions from Supabase on mount
   useEffect(() => {
-    localStorage.setItem('contaspedro_transactions', JSON.stringify(transactions));
-  }, [transactions]);
+    const fetchTransactions = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('due_date', { ascending: false });
+
+      if (error) {
+        toast.error('Erro ao carregar transações');
+      } else {
+        setTransactions((data as SupabaseTransaction[]).map(fromSupabase));
+      }
+      setLoading(false);
+    };
+
+    fetchTransactions();
+  }, []);
 
   useEffect(() => {
     setSelectedIds(new Set());
   }, [selectedMonth, statusFilter]);
 
-  // ✅ onAdd now receives an array (supports both single and recurring)
-  const handleAddTransaction = (newTransactions: Omit<Transaction, 'id'>[]) => {
-    const withIds: Transaction[] = newTransactions.map((t, i) => ({
-      ...t,
-      id: `txn_${Date.now()}_${i}`,
-    }));
-    setTransactions(prev => [...withIds, ...prev]);
+  const handleAddTransaction = async (newTransactions: Omit<Transaction, 'id'>[]) => {
+    const rows = newTransactions.map(t => toSupabase(t, session.user.id));
+    const { data, error } = await supabase.from('transactions').insert(rows).select();
+    if (error) {
+      toast.error('Erro ao adicionar transação');
+    } else {
+      const added = (data as SupabaseTransaction[]).map(fromSupabase);
+      setTransactions(prev => [...added, ...prev]);
+    }
   };
 
-  const handleEditTransaction = (transaction: Transaction) => {
-    setTransactions(prev => prev.map(t => t.id === transaction.id ? transaction : t));
-    setEditingTransaction(undefined);
+  const handleEditTransaction = async (transaction: Transaction) => {
+    const { error } = await supabase
+      .from('transactions')
+      .update(toSupabase(transaction, session.user.id))
+      .eq('id', transaction.id);
+
+    if (error) {
+      toast.error('Erro ao editar transação');
+    } else {
+      setTransactions(prev => prev.map(t => t.id === transaction.id ? transaction : t));
+      setEditingTransaction(undefined);
+      toast.success('Transação atualizada!');
+    }
   };
 
-  const handleDeleteTransaction = () => {
-    if (deletingTransaction) {
+  const handleDeleteTransaction = async () => {
+    if (!deletingTransaction) return;
+    const { error } = await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', deletingTransaction.id);
+
+    if (error) {
+      toast.error('Erro ao excluir transação');
+    } else {
       setTransactions(prev => prev.filter(t => t.id !== deletingTransaction.id));
-      toast.success('Transação excluída com sucesso!');
+      toast.success('Transação excluída!');
       setDeletingTransaction(null);
     }
   };
 
-  const handleTogglePaid = (id: string) => {
-    setTransactions(prev =>
-      prev.map(t =>
-        t.id === id ? {
-          ...t,
-          isPaid: !t.isPaid,
-          paidDate: !t.isPaid ? new Date().toISOString().split('T')[0] : undefined
-        } : t
-      )
-    );
-    toast.success('Status atualizado!');
+  const handleTogglePaid = async (id: string) => {
+    const t = transactions.find(t => t.id === id);
+    if (!t) return;
+
+    const updated = {
+      ...t,
+      isPaid: !t.isPaid,
+      paidDate: !t.isPaid ? new Date().toISOString().split('T')[0] : undefined,
+    };
+
+    const { error } = await supabase
+      .from('transactions')
+      .update({ is_paid: updated.isPaid, paid_date: updated.paidDate ?? null })
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Erro ao atualizar status');
+    } else {
+      setTransactions(prev => prev.map(t => t.id === id ? updated : t));
+      toast.success('Status atualizado!');
+    }
   };
 
   const handleToggleSelect = (id: string) => {
@@ -100,17 +176,21 @@ const Dashboard = () => {
     }
   };
 
-  const handleBulkDelete = () => {
-    setTransactions(prev => prev.filter(t => !selectedIds.has(t.id)));
-    toast.success(`${selectedIds.size} transação(ões) excluída(s)!`);
-    setSelectedIds(new Set());
-    setShowBulkDeleteConfirm(false);
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    const { error } = await supabase.from('transactions').delete().in('id', ids);
+    if (error) {
+      toast.error('Erro ao excluir transações');
+    } else {
+      setTransactions(prev => prev.filter(t => !selectedIds.has(t.id)));
+      toast.success(`${ids.length} transação(ões) excluída(s)!`);
+      setSelectedIds(new Set());
+      setShowBulkDeleteConfirm(false);
+    }
   };
 
-  const handleClearDemoData = () => {
-    setTransactions([]);
-    setSelectedIds(new Set());
-    toast.success('Dados de demonstração removidos!');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
   };
 
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -119,20 +199,11 @@ const Dashboard = () => {
     setSelectedMonth(toMonthKey(date));
   };
 
-  const transactionsInMonth = transactions.filter(t =>
-    t.dueDate.startsWith(selectedMonth)
-  );
+  const transactionsInMonth = transactions.filter(t => t.dueDate.startsWith(selectedMonth));
 
-  const totalToReceive = transactionsInMonth
-    .filter(t => t.type === 'income' && !t.isPaid)
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const totalToPay = transactionsInMonth
-    .filter(t => t.type === 'expense' && !t.isPaid)
-    .reduce((sum, t) => sum + t.amount, 0);
-
+  const totalToReceive = transactionsInMonth.filter(t => t.type === 'income' && !t.isPaid).reduce((sum, t) => sum + t.amount, 0);
+  const totalToPay = transactionsInMonth.filter(t => t.type === 'expense' && !t.isPaid).reduce((sum, t) => sum + t.amount, 0);
   const netBalance = totalToReceive - totalToPay;
-
   const overdueTransactions = transactionsInMonth.filter(t => getTransactionStatus(t) === 'overdue');
   const overdueAmount = overdueTransactions.reduce((sum, t) => sum + t.amount, 0);
 
@@ -148,39 +219,28 @@ const Dashboard = () => {
     .filter(t => t.type === 'expense')
     .reduce((acc, t) => {
       const existing = acc.find(item => item.category === t.category);
-      if (existing) {
-        existing.total += t.amount;
-      } else {
-        acc.push({ category: t.category, total: t.amount, color: '' });
-      }
+      if (existing) { existing.total += t.amount; }
+      else { acc.push({ category: t.category, total: t.amount, color: '' }); }
       return acc;
     }, [] as CategorySummary[]);
 
   const allSelected = pendingTransactions.length > 0 && selectedIds.size === pendingTransactions.length;
   const someSelected = selectedIds.size > 0;
-  const hasDemoData = transactions.some(t => t.id === '1');
 
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card sticky top-0 z-10 shadow-sm">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-bold text-foreground">Controle Financeiro</h1>
+          <h1 className="text-2xl font-bold text-foreground">WeekLeaks</h1>
           <div className="flex items-center gap-2">
-            {hasDemoData && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleClearDemoData}
-                className="text-muted-foreground border-dashed"
-              >
-                <Trash2 className="w-4 h-4 mr-1" />
-                Limpar Demo
-              </Button>
-            )}
+            <span className="text-sm text-muted-foreground hidden sm:block">{session.user.email}</span>
             <NewTransactionDialog onAdd={handleAddTransaction} />
             <a href="/extrato">
-              <Button variant="outline">Ver Extrato Completo</Button>
+              <Button variant="outline">Ver Extrato</Button>
             </a>
+            <Button variant="ghost" size="icon" onClick={handleLogout} title="Sair">
+              <LogOut className="w-4 h-4" />
+            </Button>
           </div>
         </div>
       </header>
@@ -200,93 +260,94 @@ const Dashboard = () => {
           </Button>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <SummaryCard title="Total a Receber" amount={totalToReceive} icon={TrendingUp} variant="income" />
-          <SummaryCard title="Total a Pagar" amount={totalToPay} icon={TrendingDown} variant="expense" />
-          <SummaryCard title="Saldo Líquido" amount={netBalance} icon={Wallet} variant="balance" />
-          {overdueTransactions.length > 0 && (
-            <div className="p-6 rounded-lg bg-gradient-to-br from-red-500 to-red-600 text-white shadow-lg border-2 border-red-400">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-red-50">Atrasados</p>
-                <AlertTriangle className="w-5 h-5 text-red-100" />
-              </div>
-              <p className="text-3xl font-bold mb-1">{overdueTransactions.length}</p>
-              <p className="text-sm text-red-100">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(overdueAmount)}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Pending Transactions and Chart */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Transações Pendentes</h2>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Filtrar status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="overdue">🔴 Atrasados</SelectItem>
-                  <SelectItem value="pending">🟡 Pendentes</SelectItem>
-                  <SelectItem value="future">🔵 Futuros</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {pendingTransactions.length > 0 && (
-              <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 border">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={handleSelectAll}
-                    className="w-4 h-4 cursor-pointer accent-primary"
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {someSelected ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}
-                  </span>
+        {loading ? (
+          <div className="text-center py-20 text-muted-foreground">Carregando transações...</div>
+        ) : (
+          <>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <SummaryCard title="Total a Receber" amount={totalToReceive} icon={TrendingUp} variant="income" />
+              <SummaryCard title="Total a Pagar" amount={totalToPay} icon={TrendingDown} variant="expense" />
+              <SummaryCard title="Saldo Líquido" amount={netBalance} icon={Wallet} variant="balance" />
+              {overdueTransactions.length > 0 && (
+                <div className="p-6 rounded-lg bg-gradient-to-br from-red-500 to-red-600 text-white shadow-lg border-2 border-red-400">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-medium text-red-50">Atrasados</p>
+                    <AlertTriangle className="w-5 h-5 text-red-100" />
+                  </div>
+                  <p className="text-3xl font-bold mb-1">{overdueTransactions.length}</p>
+                  <p className="text-sm text-red-100">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(overdueAmount)}
+                  </p>
                 </div>
-                {someSelected && (
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => setShowBulkDeleteConfirm(true)}
-                    className="gap-1"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Excluir {selectedIds.size}
-                  </Button>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-3">
-              {pendingTransactions.length > 0 ? (
-                pendingTransactions.map(transaction => (
-                  <TransactionItem
-                    key={transaction.id}
-                    transaction={transaction}
-                    onTogglePaid={handleTogglePaid}
-                    onEdit={setEditingTransaction}
-                    onDelete={setDeletingTransaction}
-                    isSelected={selectedIds.has(transaction.id)}
-                    onToggleSelect={handleToggleSelect}
-                  />
-                ))
-              ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  Nenhuma transação pendente em {formatMonthLabel(selectedMonth)}
-                </p>
               )}
             </div>
-          </div>
 
-          <CategoryChart data={expensesByCategory} />
-        </div>
+            {/* Pending Transactions and Chart */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold">Transações Pendentes</h2>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Filtrar status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="overdue">🔴 Atrasados</SelectItem>
+                      <SelectItem value="pending">🟡 Pendentes</SelectItem>
+                      <SelectItem value="future">🔵 Futuros</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {pendingTransactions.length > 0 && (
+                  <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 border">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={handleSelectAll}
+                        className="w-4 h-4 cursor-pointer accent-primary"
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {someSelected ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}
+                      </span>
+                    </div>
+                    {someSelected && (
+                      <Button size="sm" variant="destructive" onClick={() => setShowBulkDeleteConfirm(true)} className="gap-1">
+                        <Trash2 className="w-4 h-4" />
+                        Excluir {selectedIds.size}
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  {pendingTransactions.length > 0 ? (
+                    pendingTransactions.map(transaction => (
+                      <TransactionItem
+                        key={transaction.id}
+                        transaction={transaction}
+                        onTogglePaid={handleTogglePaid}
+                        onEdit={setEditingTransaction}
+                        onDelete={setDeletingTransaction}
+                        isSelected={selectedIds.has(transaction.id)}
+                        onToggleSelect={handleToggleSelect}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">
+                      Nenhuma transação pendente em {formatMonthLabel(selectedMonth)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <CategoryChart data={expensesByCategory} />
+            </div>
+          </>
+        )}
       </main>
 
       {editingTransaction && (
