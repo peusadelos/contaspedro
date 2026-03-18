@@ -7,18 +7,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Transaction, TransactionType, Category } from '@/types/financial';
-import { Plus } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface NewTransactionDialogProps {
   transaction?: Transaction;
-  onAdd?: (transaction: Omit<Transaction, 'id'>) => void;
+  onAdd?: (transactions: Omit<Transaction, 'id'>[]) => void;
   onEdit?: (transaction: Transaction) => void;
   trigger?: React.ReactNode;
 }
 
 const expenseCategories: Category[] = ['Contas', 'Gastos Pessoais', 'Compras', 'Pagamento de Dívidas'];
 const incomeCategories: Category[] = ['Salário', 'Freela', 'Extra'];
+
+// Add X months to a YYYY-MM-DD date string, keeping the same day
+const addMonths = (dateStr: string, months: number): string => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1 + months, day);
+  // If day overflows (e.g. Jan 31 + 1 month), use last day of that month
+  if (date.getDate() !== day) {
+    date.setDate(0);
+  }
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: NewTransactionDialogProps) => {
   const isEditing = !!transaction;
@@ -30,6 +44,10 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
   const [category, setCategory] = useState<Category>(transaction?.category || 'Contas');
   const [isPaid, setIsPaid] = useState(transaction?.isPaid || false);
   const [notes, setNotes] = useState('');
+
+  // ✅ Recurring state
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringMonths, setRecurringMonths] = useState('12');
 
   const categories = type === 'expense' ? expenseCategories : incomeCategories;
 
@@ -46,18 +64,16 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!description.trim()) {
       toast.error('Descrição é obrigatória');
       return;
     }
-
     const amountValue = parseFloat(amount);
     if (!amount || isNaN(amountValue) || amountValue <= 0) {
       toast.error('Valor deve ser maior que zero');
       return;
     }
-
     if (!category) {
       toast.error('Selecione uma categoria');
       return;
@@ -78,18 +94,42 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
       });
       toast.success('Transação atualizada com sucesso!');
     } else if (onAdd) {
-      onAdd({
-        description: description.trim(),
-        amount: amountValue,
-        date: dueDate,
-        createdDate: today,
-        dueDate,
-        paidDate: isPaid ? today : undefined,
-        category,
-        type,
-        isPaid,
-      });
-      toast.success('Transação adicionada com sucesso!');
+      if (isRecurring) {
+        // ✅ Generate one transaction per month
+        const months = Math.max(1, Math.min(60, parseInt(recurringMonths) || 12));
+        const recurringGroup = `recurring_${Date.now()}`;
+        const generated: Omit<Transaction, 'id'>[] = Array.from({ length: months }, (_, i) => {
+          const monthDueDate = addMonths(dueDate, i);
+          return {
+            description: description.trim(),
+            amount: amountValue,
+            date: monthDueDate,
+            createdDate: today,
+            dueDate: monthDueDate,
+            paidDate: isPaid && i === 0 ? today : undefined,
+            category,
+            type,
+            isPaid: isPaid && i === 0,
+            recurringGroup,
+          };
+        });
+        onAdd(generated);
+        toast.success(`${months} transações recorrentes criadas!`);
+      } else {
+        // Single transaction
+        onAdd([{
+          description: description.trim(),
+          amount: amountValue,
+          date: dueDate,
+          createdDate: today,
+          dueDate,
+          paidDate: isPaid ? today : undefined,
+          category,
+          type,
+          isPaid,
+        }]);
+        toast.success('Transação adicionada com sucesso!');
+      }
     }
 
     setOpen(false);
@@ -103,6 +143,8 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
       setDueDate(new Date().toISOString().split('T')[0]);
       setIsPaid(false);
       setNotes('');
+      setIsRecurring(false);
+      setRecurringMonths('12');
     }
   };
 
@@ -181,7 +223,9 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="dueDate">Data de Vencimento</Label>
+            <Label htmlFor="dueDate">
+              {isRecurring ? 'Data de Vencimento (1º mês)' : 'Data de Vencimento'}
+            </Label>
             <Input
               id="dueDate"
               type="date"
@@ -197,7 +241,7 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Observações adicionais..."
-              rows={3}
+              rows={2}
             />
           </div>
 
@@ -212,8 +256,62 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
             </Label>
           </div>
 
+          {/* ✅ Recurring toggle — hidden when editing */}
+          {!isEditing && (
+            <div className="rounded-lg border p-3 space-y-3 bg-muted/30">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="isRecurring"
+                  checked={isRecurring}
+                  onCheckedChange={(checked) => setIsRecurring(checked as boolean)}
+                />
+                <Label htmlFor="isRecurring" className="text-sm font-normal cursor-pointer flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3" />
+                  Repetir mensalmente
+                </Label>
+              </div>
+
+              {isRecurring && (
+                <div className="space-y-2 pl-6">
+                  <Label htmlFor="recurringMonths" className="text-sm">
+                    Quantos meses?
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="recurringMonths"
+                      type="number"
+                      min="2"
+                      max="60"
+                      value={recurringMonths}
+                      onChange={(e) => setRecurringMonths(e.target.value)}
+                      className="w-24"
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      meses → até{' '}
+                      {(() => {
+                        const months = parseInt(recurringMonths) || 0;
+                        if (months < 2) return '...';
+                        const end = addMonths(dueDate, months - 1);
+                        const [y, m] = end.split('-');
+                        return new Date(Number(y), Number(m) - 1, 1)
+                          .toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+                      })()}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Serão criadas {recurringMonths} transações independentes, uma por mês no mesmo dia.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <Button type="submit" className="w-full">
-            {isEditing ? 'Salvar Alterações' : 'Adicionar'}
+            {isEditing
+              ? 'Salvar Alterações'
+              : isRecurring
+              ? `Criar ${recurringMonths} transações`
+              : 'Adicionar'}
           </Button>
         </form>
       </DialogContent>
