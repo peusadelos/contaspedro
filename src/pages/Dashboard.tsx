@@ -23,7 +23,6 @@ const toMonthKey = (date: Date) => {
   return `${y}-${m}`;
 };
 
-// ✅ FIX: lowercase month label (e.g. "março 2026" not "Março De 2026")
 const formatMonthLabel = (monthKey: string) => {
   const [year, month] = monthKey.split('-');
   const date = new Date(Number(year), Number(month) - 1, 1);
@@ -72,7 +71,7 @@ const Dashboard = ({ session }: DashboardProps) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
-  // ✅ Dark mode
+  // Dark mode
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return document.documentElement.classList.contains('dark') ||
@@ -235,6 +234,17 @@ const Dashboard = ({ session }: DashboardProps) => {
   const incomeCount = transactionsInMonth.filter(t => t.type === 'income' && !t.isPaid).length;
   const expenseCount = transactionsInMonth.filter(t => t.type === 'expense' && !t.isPaid).length;
 
+  // ✅ FIX: single trigger button that adapts to screen size using CSS only
+  const addTrigger = (
+    <Button
+      size="sm"
+      className="h-8 bg-violet-600 hover:bg-violet-700 rounded-lg text-xs gap-1.5 px-2.5 sm:px-3"
+    >
+      <Plus className="w-3.5 h-3.5 flex-shrink-0" />
+      <span className="hidden sm:inline">Nova Transação</span>
+    </Button>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
 
@@ -252,30 +262,14 @@ const Dashboard = ({ session }: DashboardProps) => {
             </span>
           </div>
 
-          {/* ✅ Mobile-friendly action row */}
+          {/* Actions */}
           <div className="flex items-center gap-1.5">
-            {/* Email — desktop only */}
             <span className="text-xs text-slate-500 dark:text-slate-400 hidden md:block truncate max-w-[160px]">
               {session.user.email}
             </span>
 
-            {/* Nova Transação — icon only on mobile, full on desktop */}
-            <NewTransactionDialog
-              onAdd={handleAddTransaction}
-              trigger={
-                <>
-                  {/* Mobile: icon only */}
-                  <Button size="sm" className="sm:hidden h-8 w-8 p-0 bg-violet-600 hover:bg-violet-700 rounded-lg">
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                  {/* Desktop: full label */}
-                  <Button size="sm" className="hidden sm:flex h-8 gap-1.5 bg-violet-600 hover:bg-violet-700 text-xs rounded-lg">
-                    <Plus className="w-3.5 h-3.5" />
-                    Nova Transação
-                  </Button>
-                </>
-              }
-            />
+            {/* ✅ Single trigger — text hidden on mobile via CSS, no dual-button trick */}
+            <NewTransactionDialog onAdd={handleAddTransaction} trigger={addTrigger} />
 
             <a href="/extrato">
               <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5">
@@ -283,7 +277,6 @@ const Dashboard = ({ session }: DashboardProps) => {
               </Button>
             </a>
 
-            {/* ✅ Dark mode toggle */}
             <Button
               variant="ghost"
               size="icon"
@@ -309,27 +302,16 @@ const Dashboard = ({ session }: DashboardProps) => {
 
       <main className="max-w-6xl mx-auto px-3 sm:px-6 py-5 space-y-5">
 
-        {/* Month Navigator + overdue pill */}
+        {/* Month Navigator */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigateMonth('prev')}
-              className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800"
-            >
+            <Button variant="ghost" size="icon" onClick={() => navigateMonth('prev')} className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800">
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            {/* ✅ FIX: lowercase via CSS to avoid "Março De 2026" */}
-            <h1 className="text-base font-semibold text-slate-900 dark:text-slate-100 w-36 sm:w-44 text-center" style={{ textTransform: 'lowercase', fontVariant: 'normal' }}>
+            <h1 className="text-base font-semibold text-slate-900 dark:text-slate-100 w-36 sm:w-44 text-center capitalize">
               {formatMonthLabel(selectedMonth)}
             </h1>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigateMonth('next')}
-              className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800"
-            >
+            <Button variant="ghost" size="icon" onClick={() => navigateMonth('next')} className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800">
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
@@ -386,12 +368,7 @@ const Dashboard = ({ session }: DashboardProps) => {
               {pendingTransactions.length > 0 && (
                 <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={handleSelectAll}
-                      className="w-4 h-4 cursor-pointer accent-violet-600"
-                    />
+                    <input type="checkbox" checked={allSelected} onChange={handleSelectAll} className="w-4 h-4 cursor-pointer accent-violet-600" />
                     <span className="text-xs text-slate-500 dark:text-slate-400">
                       {someSelected ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}
                     </span>
@@ -424,7 +401,7 @@ const Dashboard = ({ session }: DashboardProps) => {
                       <Plus className="w-5 h-5 text-slate-400" />
                     </div>
                     <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Nenhuma transação pendente</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1" style={{ textTransform: 'lowercase' }}>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 capitalize">
                       {formatMonthLabel(selectedMonth)}
                     </p>
                   </div>
@@ -434,9 +411,7 @@ const Dashboard = ({ session }: DashboardProps) => {
 
             {/* Chart */}
             <div className="lg:col-span-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
-                Resumo
-              </h2>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Resumo</h2>
               <CategoryChart data={expensesByCategory} />
             </div>
           </div>
