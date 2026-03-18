@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -59,7 +59,6 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!description.trim()) { toast.error('Descrição é obrigatória'); return; }
     const amountValue = parseFloat(amount);
     if (!amount || isNaN(amountValue) || amountValue <= 0) { toast.error('Valor deve ser maior que zero'); return; }
@@ -137,190 +136,181 @@ export const NewTransactionDialog = ({ transaction, onAdd, onEdit, trigger }: Ne
     setCategory(newType === 'expense' ? 'Contas' : 'Salário');
   };
 
+  // ✅ FIX: We no longer use DialogTrigger at all.
+  // Instead, we render the trigger ourselves with an onClick that sets open=true.
+  // This is 100% reliable and avoids all asChild/forwardRef issues.
+  const triggerElement = trigger ? (
+    <span onClick={() => setOpen(true)} style={{ display: 'contents' }}>
+      {trigger}
+    </span>
+  ) : (
+    <Button onClick={() => setOpen(true)} className="gap-2">
+      <Plus className="w-4 h-4" />
+      Nova Transação
+    </Button>
+  );
+
   return (
-    // ✅ FIX: modal={false} prevents the Dialog from trapping focus,
-    // which was causing the blank page when a Select dropdown was open
-    // and the user clicked outside
-    <Dialog open={open} onOpenChange={setOpen} modal={false}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <Button className="gap-2">
-            <Plus className="w-4 h-4" />
-            Nova Transação
-          </Button>
+    <>
+      {triggerElement}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        {open && (
+          <div
+            className="fixed inset-0 z-40 bg-black/40"
+            onClick={() => setOpen(false)}
+          />
         )}
-      </DialogTrigger>
+        <DialogContent className="sm:max-w-[425px] z-50 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{isEditing ? 'Editar Transação' : 'Adicionar Transação'}</DialogTitle>
+          </DialogHeader>
 
-      {/* ✅ FIX: Added fixed inset overlay so clicking outside still closes properly */}
-      {open && (
-        <div
-          className="fixed inset-0 z-40 bg-black/40"
-          onClick={() => setOpen(false)}
-        />
-      )}
+          <form onSubmit={handleSubmit} className="space-y-4">
 
-      <DialogContent className="sm:max-w-[425px] z-50 max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? 'Editar Transação' : 'Adicionar Transação'}</DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-
-          {/* Tipo */}
-          <div className="space-y-2">
-            <Label>Tipo</Label>
-            {/* ✅ FIX: Select inside Dialog needs SelectContent with a high z-index */}
-            <Select value={type} onValueChange={(v) => handleTypeChange(v as TransactionType)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="z-[200]">
-                <SelectItem value="expense">Despesa</SelectItem>
-                <SelectItem value="income">Receita</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Descrição */}
-          <div className="space-y-2">
-            <Label htmlFor="description">Descrição *</Label>
-            <Input
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Ex: Supermercado"
-              required
-            />
-          </div>
-
-          {/* Valor */}
-          <div className="space-y-2">
-            <Label htmlFor="amount">Valor *</Label>
-            <Input
-              id="amount"
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              required
-            />
-          </div>
-
-          {/* Categoria */}
-          <div className="space-y-2">
-            <Label>Categoria</Label>
-            <Select value={category} onValueChange={(val) => setCategory(val as Category)}>
-              <SelectTrigger>
-                {/* ✅ FIX: placeholder forces Radix to render label text correctly,
-                    preventing the "ContasContas" duplication bug */}
-                <SelectValue placeholder="Selecione uma categoria" />
-              </SelectTrigger>
-              <SelectContent className="z-[200]">
-                {categories.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Data */}
-          <div className="space-y-2">
-            <Label htmlFor="dueDate">
-              {isRecurring ? 'Data de Vencimento (1º mês)' : 'Data de Vencimento'}
-            </Label>
-            <Input
-              id="dueDate"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
-          </div>
-
-          {/* Observações */}
-          <div className="space-y-2">
-            <Label htmlFor="notes">Observações (opcional)</Label>
-            <Textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Observações adicionais..."
-              rows={2}
-            />
-          </div>
-
-          {/* Marcar como pago */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="isPaid"
-              checked={isPaid}
-              onCheckedChange={(checked) => setIsPaid(checked as boolean)}
-            />
-            <Label htmlFor="isPaid" className="text-sm font-normal cursor-pointer">
-              Marcar como {type === 'income' ? 'Recebido' : 'Pago'}
-            </Label>
-          </div>
-
-          {/* Recorrente — só ao adicionar */}
-          {!isEditing && (
-            <div className="rounded-lg border p-3 space-y-3 bg-muted/30">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="isRecurring"
-                  checked={isRecurring}
-                  onCheckedChange={(checked) => setIsRecurring(checked as boolean)}
-                />
-                <Label htmlFor="isRecurring" className="text-sm font-normal cursor-pointer flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3" />
-                  Repetir mensalmente
-                </Label>
-              </div>
-
-              {isRecurring && (
-                <div className="space-y-2 pl-6">
-                  <Label htmlFor="recurringMonths" className="text-sm">Quantos meses?</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="recurringMonths"
-                      type="number"
-                      min="2"
-                      max="60"
-                      value={recurringMonths}
-                      onChange={(e) => setRecurringMonths(e.target.value)}
-                      className="w-24"
-                    />
-                    <span className="text-sm text-muted-foreground">
-                      meses → até{' '}
-                      {(() => {
-                        const months = parseInt(recurringMonths) || 0;
-                        if (months < 2) return '...';
-                        const end = addMonths(dueDate, months - 1);
-                        const [y, m] = end.split('-');
-                        return new Date(Number(y), Number(m) - 1, 1)
-                          .toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-                      })()}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Serão criadas {recurringMonths} transações independentes, uma por mês no mesmo dia.
-                  </p>
-                </div>
-              )}
+            <div className="space-y-2">
+              <Label>Tipo</Label>
+              <Select value={type} onValueChange={(v) => handleTypeChange(v as TransactionType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="z-[200]">
+                  <SelectItem value="expense">Despesa</SelectItem>
+                  <SelectItem value="income">Receita</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          )}
 
-          <Button type="submit" className="w-full">
-            {isEditing
-              ? 'Salvar Alterações'
-              : isRecurring
-              ? `Criar ${recurringMonths} transações`
-              : 'Adicionar'}
-          </Button>
-        </form>
-      </DialogContent>
-    </Dialog>
+            <div className="space-y-2">
+              <Label htmlFor="description">Descrição *</Label>
+              <Input
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Ex: Supermercado"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="amount">Valor *</Label>
+              <Input
+                id="amount"
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Categoria</Label>
+              <Select value={category} onValueChange={(val) => setCategory(val as Category)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione uma categoria" />
+                </SelectTrigger>
+                <SelectContent className="z-[200]">
+                  {categories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="dueDate">
+                {isRecurring ? 'Data de Vencimento (1º mês)' : 'Data de Vencimento'}
+              </Label>
+              <Input
+                id="dueDate"
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Observações (opcional)</Label>
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Observações adicionais..."
+                rows={2}
+              />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="isPaid"
+                checked={isPaid}
+                onCheckedChange={(checked) => setIsPaid(checked as boolean)}
+              />
+              <Label htmlFor="isPaid" className="text-sm font-normal cursor-pointer">
+                Marcar como {type === 'income' ? 'Recebido' : 'Pago'}
+              </Label>
+            </div>
+
+            {!isEditing && (
+              <div className="rounded-lg border p-3 space-y-3 bg-muted/30">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="isRecurring"
+                    checked={isRecurring}
+                    onCheckedChange={(checked) => setIsRecurring(checked as boolean)}
+                  />
+                  <Label htmlFor="isRecurring" className="text-sm font-normal cursor-pointer flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3" />
+                    Repetir mensalmente
+                  </Label>
+                </div>
+
+                {isRecurring && (
+                  <div className="space-y-2 pl-6">
+                    <Label htmlFor="recurringMonths" className="text-sm">Quantos meses?</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="recurringMonths"
+                        type="number"
+                        min="2"
+                        max="60"
+                        value={recurringMonths}
+                        onChange={(e) => setRecurringMonths(e.target.value)}
+                        className="w-24"
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        meses → até{' '}
+                        {(() => {
+                          const months = parseInt(recurringMonths) || 0;
+                          if (months < 2) return '...';
+                          const end = addMonths(dueDate, months - 1);
+                          const [y, m] = end.split('-');
+                          return new Date(Number(y), Number(m) - 1, 1)
+                            .toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+                        })()}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Serão criadas {recurringMonths} transações independentes, uma por mês no mesmo dia.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <Button type="submit" className="w-full">
+              {isEditing
+                ? 'Salvar Alterações'
+                : isRecurring
+                ? `Criar ${recurringMonths} transações`
+                : 'Adicionar'}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
