@@ -204,20 +204,28 @@ const Dashboard = ({ session }: DashboardProps) => {
   };
 
   const transactionsInMonth = transactions.filter(t => t.dueDate.startsWith(selectedMonth));
- // Summary cards show ALL transactions (paid + unpaid) for the month
-const totalToReceive = transactionsInMonth
-  .filter(t => t.type === 'income')
-  .reduce((sum, t) => sum + t.amount, 0);
-const totalToPaid = transactionsInMonth
-  .filter(t => t.type === 'income' && t.isPaid)
-  .reduce((sum, t) => sum + t.amount, 0);
-const totalToPay = transactionsInMonth
-  .filter(t => t.type === 'expense')
-  .reduce((sum, t) => sum + t.amount, 0);
-const netBalance = totalToReceive - totalToPay;
+
+  // ✅ FIX: Summary cards count ALL transactions (paid + unpaid) for the month
+  // This matches the Extrato page which also shows totals regardless of payment status
+  const totalIncome = transactionsInMonth
+    .filter(t => t.type === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalExpense = transactionsInMonth
+    .filter(t => t.type === 'expense')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const netBalance = totalIncome - totalExpense;
+
+  // Counts for subtitles
+  const incomeCount = transactionsInMonth.filter(t => t.type === 'income').length;
+  const expenseCount = transactionsInMonth.filter(t => t.type === 'expense').length;
+
+  // Overdue still based on unpaid only
   const overdueTransactions = transactionsInMonth.filter(t => getTransactionStatus(t) === 'overdue');
   const overdueAmount = overdueTransactions.reduce((sum, t) => sum + t.amount, 0);
 
+  // Pending list — only unpaid
   const pendingTransactions = transactionsInMonth
     .filter(t => {
       if (t.isPaid) return false;
@@ -226,6 +234,7 @@ const netBalance = totalToReceive - totalToPay;
     })
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
+  // Chart uses all expenses for the month
   const expensesByCategory: CategorySummary[] = transactionsInMonth
     .filter(t => t.type === 'expense')
     .reduce((acc, t) => {
@@ -237,8 +246,6 @@ const netBalance = totalToReceive - totalToPay;
 
   const allSelected = pendingTransactions.length > 0 && selectedIds.size === pendingTransactions.length;
   const someSelected = selectedIds.size > 0;
-  const incomeCount = transactionsInMonth.filter(t => t.type === 'income').length;
-  const expenseCount = transactionsInMonth.filter(t => t.type === 'expense').length;
 
   const addTrigger = (
     <Button size="sm" className="h-8 bg-violet-600 hover:bg-violet-700 rounded-lg text-xs gap-1.5 px-2.5 sm:px-3">
@@ -253,8 +260,6 @@ const netBalance = totalToReceive - totalToPay;
       {/* Header */}
       <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
-
-          {/* Logo */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center">
               <LayoutDashboard className="w-4 h-4 text-white" />
@@ -264,43 +269,24 @@ const netBalance = totalToReceive - totalToPay;
             </span>
           </div>
 
-          {/* Actions */}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-slate-500 dark:text-slate-400 hidden md:block truncate max-w-[160px]">
               {session.user.email}
             </span>
-
             <NewTransactionDialog onAdd={handleAddTransaction} trigger={addTrigger} />
-
-            {/* ✅ Extrato link */}
             <Link to="/extrato">
-              <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5">
-                Extrato
-              </Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5">Extrato</Button>
             </Link>
-
-            {/* ✅ Histórico link */}
             <Link to="/historico">
-              <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5 hidden sm:flex">
-                Histórico
-              </Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5 hidden sm:flex">Histórico</Button>
             </Link>
-
-            <Button
-              variant="ghost" size="icon"
-              onClick={() => setDarkMode(!darkMode)}
+            <Button variant="ghost" size="icon" onClick={() => setDarkMode(!darkMode)}
               className="h-8 w-8 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-              title={darkMode ? 'Modo claro' : 'Modo escuro'}
-            >
+              title={darkMode ? 'Modo claro' : 'Modo escuro'}>
               {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </Button>
-
-            <Button
-              variant="ghost" size="icon"
-              onClick={handleLogout}
-              className="h-8 w-8 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-              title="Sair"
-            >
+            <Button variant="ghost" size="icon" onClick={handleLogout}
+              className="h-8 w-8 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" title="Sair">
               <LogOut className="w-4 h-4" />
             </Button>
           </div>
@@ -312,13 +298,15 @@ const netBalance = totalToReceive - totalToPay;
         {/* Month Navigator */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => navigateMonth('prev')} className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800">
+            <Button variant="ghost" size="icon" onClick={() => navigateMonth('prev')}
+              className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800">
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <h1 className="text-base font-semibold text-slate-900 dark:text-slate-100 w-36 sm:w-44 text-center capitalize">
               {formatMonthLabel(selectedMonth)}
             </h1>
-            <Button variant="ghost" size="icon" onClick={() => navigateMonth('next')} className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800">
+            <Button variant="ghost" size="icon" onClick={() => navigateMonth('next')}
+              className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800">
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
@@ -333,13 +321,29 @@ const netBalance = totalToReceive - totalToPay;
           )}
         </div>
 
-        {/* Summary Cards */}
-       <SummaryCard title="Receitas" amount={totalToReceive} icon={TrendingUp} variant="income"
-  subtitle={`${incomeCount} receita${incomeCount !== 1 ? 's' : ''} no mês`} />
-<SummaryCard title="Despesas" amount={totalToPay} icon={TrendingDown} variant="expense"
-  subtitle={`${expenseCount} despesa${expenseCount !== 1 ? 's' : ''} no mês`} />
-<SummaryCard title="Saldo líquido" amount={netBalance} icon={Wallet} variant="balance"
-  subtitle="Receitas − despesas do mês" />
+        {/* ✅ Summary Cards — now show ALL transactions for the month */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <SummaryCard
+            title="Receitas"
+            amount={totalIncome}
+            icon={TrendingUp}
+            variant="income"
+            subtitle={`${incomeCount} receita${incomeCount !== 1 ? 's' : ''} no mês`}
+          />
+          <SummaryCard
+            title="Despesas"
+            amount={totalExpense}
+            icon={TrendingDown}
+            variant="expense"
+            subtitle={`${expenseCount} despesa${expenseCount !== 1 ? 's' : ''} no mês`}
+          />
+          <SummaryCard
+            title="Saldo líquido"
+            amount={netBalance}
+            icon={Wallet}
+            variant="balance"
+            subtitle="Receitas − despesas do mês"
+          />
         </div>
 
         {loading ? (
@@ -355,7 +359,9 @@ const netBalance = totalToReceive - totalToPay;
             {/* Pending Transactions */}
             <div className="lg:col-span-3 space-y-3">
               <div className="flex items-center justify-between">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Pendentes</h2>
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Pendentes
+                </h2>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="w-[130px] h-7 text-xs rounded-lg border-slate-200 dark:border-slate-700">
                     <SelectValue placeholder="Filtrar" />
@@ -372,13 +378,15 @@ const netBalance = totalToReceive - totalToPay;
               {pendingTransactions.length > 0 && (
                 <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-2">
-                    <input type="checkbox" checked={allSelected} onChange={handleSelectAll} className="w-4 h-4 cursor-pointer accent-violet-600" />
+                    <input type="checkbox" checked={allSelected} onChange={handleSelectAll}
+                      className="w-4 h-4 cursor-pointer accent-violet-600" />
                     <span className="text-xs text-slate-500 dark:text-slate-400">
                       {someSelected ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}
                     </span>
                   </div>
                   {someSelected && (
-                    <Button size="sm" variant="destructive" onClick={() => setShowBulkDeleteConfirm(true)} className="h-6 text-xs gap-1 px-2.5">
+                    <Button size="sm" variant="destructive" onClick={() => setShowBulkDeleteConfirm(true)}
+                      className="h-6 text-xs gap-1 px-2.5">
                       <Trash2 className="w-3 h-3" />
                       Excluir {selectedIds.size}
                     </Button>
@@ -415,7 +423,9 @@ const netBalance = totalToReceive - totalToPay;
 
             {/* Chart */}
             <div className="lg:col-span-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Resumo</h2>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+                Resumo
+              </h2>
               <CategoryChart data={expensesByCategory} />
             </div>
           </div>
