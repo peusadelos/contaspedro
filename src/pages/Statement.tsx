@@ -43,6 +43,30 @@ const toSupabase = (t: Omit<Transaction, 'id'>, userId: string) => ({
   recurring_group: (t as any).recurringGroup ?? null,
 });
 
+// ✅ Month/year options for Safari-compatible filter
+const MONTHS = [
+  { value: '01', label: 'Janeiro' },
+  { value: '02', label: 'Fevereiro' },
+  { value: '03', label: 'Março' },
+  { value: '04', label: 'Abril' },
+  { value: '05', label: 'Maio' },
+  { value: '06', label: 'Junho' },
+  { value: '07', label: 'Julho' },
+  { value: '08', label: 'Agosto' },
+  { value: '09', label: 'Setembro' },
+  { value: '10', label: 'Outubro' },
+  { value: '11', label: 'Novembro' },
+  { value: '12', label: 'Dezembro' },
+];
+
+const getYearOptions = () => {
+  const current = new Date().getFullYear();
+  return [current - 2, current - 1, current, current + 1].map(y => ({
+    value: String(y),
+    label: String(y),
+  }));
+};
+
 interface StatementProps {
   session: Session;
 }
@@ -51,7 +75,11 @@ const Statement = ({ session }: StatementProps) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterMonth, setFilterMonth] = useState('');
+
+  // ✅ FIX: Split filterMonth into separate month + year selects (Safari compatible)
+  const [filterMonthNum, setFilterMonthNum] = useState<string>('all');
+  const [filterYear, setFilterYear] = useState<string>('all');
+
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -135,9 +163,10 @@ const Statement = ({ session }: StatementProps) => {
 
   const filteredTransactions = transactions
     .filter(t => {
-      // ✅ Search filter
       if (search && !t.description.toLowerCase().includes(search.toLowerCase())) return false;
-      if (filterMonth && !t.dueDate.startsWith(filterMonth)) return false;
+      // ✅ FIX: filter by month and year separately
+      if (filterYear !== 'all' && !t.dueDate.startsWith(filterYear)) return false;
+      if (filterMonthNum !== 'all' && t.dueDate.slice(5, 7) !== filterMonthNum) return false;
       if (filterCategory !== 'all' && t.category !== filterCategory) return false;
       if (filterType !== 'all' && t.type !== filterType) return false;
       if (filterStatus !== 'all' && getTransactionStatus(t) !== filterStatus) return false;
@@ -150,15 +179,19 @@ const Statement = ({ session }: StatementProps) => {
   const formatDate = (date: string) => new Date(date + 'T12:00:00').toLocaleDateString('pt-BR');
   const formatDateTime = (date: string) => new Date(date + 'T12:00:00').toLocaleDateString('pt-BR');
 
-  const hasActiveFilters = search || filterMonth || filterCategory !== 'all' || filterType !== 'all' || filterStatus !== 'all';
+  const hasActiveFilters = search || filterMonthNum !== 'all' || filterYear !== 'all' ||
+    filterCategory !== 'all' || filterType !== 'all' || filterStatus !== 'all';
 
   const clearAllFilters = () => {
     setSearch('');
-    setFilterMonth('');
+    setFilterMonthNum('all');
+    setFilterYear('all');
     setFilterCategory('all');
     setFilterType('all');
     setFilterStatus('all');
   };
+
+  const yearOptions = getYearOptions();
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -203,7 +236,7 @@ const Statement = ({ session }: StatementProps) => {
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Todas as suas transações</p>
         </div>
 
-        {/* ✅ Search bar */}
+        {/* Search bar */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input
@@ -213,22 +246,49 @@ const Statement = ({ session }: StatementProps) => {
             className="pl-9 pr-9 h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
           />
           {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
+            <button onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
               <X className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Filters */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {/* ✅ Filters — month and year as separate dropdowns (works on Safari) */}
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+
+          {/* Month dropdown */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Mês</label>
-            <Input type="month" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}
-              className="h-9 text-sm rounded-lg border-slate-200 dark:border-slate-700" />
+            <Select value={filterMonthNum} onValueChange={setFilterMonthNum}>
+              <SelectTrigger className="h-9 text-sm rounded-lg border-slate-200 dark:border-slate-700">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {MONTHS.map(m => (
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+
+          {/* Year dropdown */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Ano</label>
+            <Select value={filterYear} onValueChange={setFilterYear}>
+              <SelectTrigger className="h-9 text-sm rounded-lg border-slate-200 dark:border-slate-700">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {yearOptions.map(y => (
+                  <SelectItem key={y.value} value={y.value}>{y.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Category */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Categoria</label>
             <Select value={filterCategory} onValueChange={setFilterCategory}>
@@ -241,6 +301,8 @@ const Statement = ({ session }: StatementProps) => {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Type */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Tipo</label>
             <Select value={filterType} onValueChange={setFilterType}>
@@ -254,6 +316,8 @@ const Statement = ({ session }: StatementProps) => {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Status */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Status</label>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -269,12 +333,12 @@ const Statement = ({ session }: StatementProps) => {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Clear */}
           <div className="flex items-end">
             <Button variant="outline" onClick={clearAllFilters}
               className={cn("w-full h-9 text-sm rounded-lg", hasActiveFilters && "border-violet-400 text-violet-600 dark:border-violet-600 dark:text-violet-400")}>
-              {hasActiveFilters ? (
-                <><X className="w-3.5 h-3.5 mr-1.5" />Limpar</>
-              ) : 'Limpar filtros'}
+              {hasActiveFilters ? <><X className="w-3.5 h-3.5 mr-1.5" />Limpar</> : 'Limpar filtros'}
             </Button>
           </div>
         </div>
@@ -314,13 +378,9 @@ const Statement = ({ session }: StatementProps) => {
                       const status = getTransactionStatus(transaction);
                       const daysOverdue = getDaysOverdue(transaction);
                       return (
-                        <TableRow
-                          key={transaction.id}
-                          className={cn(
-                            "border-slate-100 dark:border-slate-800/60",
-                            status === 'overdue' && "bg-rose-50/50 dark:bg-rose-950/10"
-                          )}
-                        >
+                        <TableRow key={transaction.id}
+                          className={cn("border-slate-100 dark:border-slate-800/60",
+                            status === 'overdue' && "bg-rose-50/50 dark:bg-rose-950/10")}>
                           <TableCell className="text-sm text-slate-600 dark:text-slate-300">
                             <div>{formatDate(transaction.dueDate)}</div>
                             {daysOverdue > 0 && (
@@ -329,7 +389,6 @@ const Statement = ({ session }: StatementProps) => {
                           </TableCell>
                           <TableCell className="font-medium text-sm text-slate-900 dark:text-slate-100">
                             <div className="flex items-center gap-1">
-                              {/* Highlight search match */}
                               {search ? (
                                 <span dangerouslySetInnerHTML={{
                                   __html: transaction.description.replace(
@@ -347,19 +406,15 @@ const Statement = ({ session }: StatementProps) => {
                             <Badge variant="outline" className="text-xs">{transaction.category}</Badge>
                           </TableCell>
                           <TableCell className="hidden md:table-cell">
-                            <Badge className={cn(
-                              "text-xs",
+                            <Badge className={cn("text-xs",
                               transaction.type === 'income'
                                 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-0"
-                                : "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400 border-0"
-                            )}>
+                                : "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400 border-0")}>
                               {transaction.type === 'income' ? 'Receita' : 'Despesa'}
                             </Badge>
                           </TableCell>
-                          <TableCell className={cn(
-                            "text-right font-bold text-sm",
-                            transaction.type === 'income' ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
-                          )}>
+                          <TableCell className={cn("text-right font-bold text-sm",
+                            transaction.type === 'income' ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
                             {transaction.type === 'income' ? '+' : '−'}{formatCurrency(transaction.amount)}
                           </TableCell>
                           <TableCell className="text-right">
