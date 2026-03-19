@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { Transaction, CategorySummary } from '@/types/financial';
@@ -15,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getTransactionStatus } from '@/lib/financialUtils';
 
@@ -72,7 +72,6 @@ const Dashboard = ({ session }: DashboardProps) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
-  // Dark mode
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return document.documentElement.classList.contains('dark') ||
@@ -196,9 +195,7 @@ const Dashboard = ({ session }: DashboardProps) => {
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
+  const handleLogout = async () => { await supabase.auth.signOut(); };
 
   const navigateMonth = (direction: 'prev' | 'next') => {
     const [year, month] = selectedMonth.split('-').map(Number);
@@ -235,12 +232,8 @@ const Dashboard = ({ session }: DashboardProps) => {
   const incomeCount = transactionsInMonth.filter(t => t.type === 'income' && !t.isPaid).length;
   const expenseCount = transactionsInMonth.filter(t => t.type === 'expense' && !t.isPaid).length;
 
-  // ✅ FIX: single trigger button that adapts to screen size using CSS only
   const addTrigger = (
-    <Button
-      size="sm"
-      className="h-8 bg-violet-600 hover:bg-violet-700 rounded-lg text-xs gap-1.5 px-2.5 sm:px-3"
-    >
+    <Button size="sm" className="h-8 bg-violet-600 hover:bg-violet-700 rounded-lg text-xs gap-1.5 px-2.5 sm:px-3">
       <Plus className="w-3.5 h-3.5 flex-shrink-0" />
       <span className="hidden sm:inline">Nova Transação</span>
     </Button>
@@ -269,18 +262,24 @@ const Dashboard = ({ session }: DashboardProps) => {
               {session.user.email}
             </span>
 
-            {/* ✅ Single trigger — text hidden on mobile via CSS, no dual-button trick */}
             <NewTransactionDialog onAdd={handleAddTransaction} trigger={addTrigger} />
 
+            {/* ✅ Extrato link */}
             <Link to="/extrato">
-  <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5">
-    Extrato
-  </Button>
-</Link>
+              <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5">
+                Extrato
+              </Button>
+            </Link>
+
+            {/* ✅ Histórico link */}
+            <Link to="/historico">
+              <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5 hidden sm:flex">
+                Histórico
+              </Button>
+            </Link>
 
             <Button
-              variant="ghost"
-              size="icon"
+              variant="ghost" size="icon"
               onClick={() => setDarkMode(!darkMode)}
               className="h-8 w-8 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
               title={darkMode ? 'Modo claro' : 'Modo escuro'}
@@ -289,8 +288,7 @@ const Dashboard = ({ session }: DashboardProps) => {
             </Button>
 
             <Button
-              variant="ghost"
-              size="icon"
+              variant="ghost" size="icon"
               onClick={handleLogout}
               className="h-8 w-8 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
               title="Sair"
@@ -350,9 +348,7 @@ const Dashboard = ({ session }: DashboardProps) => {
             {/* Pending Transactions */}
             <div className="lg:col-span-3 space-y-3">
               <div className="flex items-center justify-between">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Pendentes
-                </h2>
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Pendentes</h2>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="w-[130px] h-7 text-xs rounded-lg border-slate-200 dark:border-slate-700">
                     <SelectValue placeholder="Filtrar" />
