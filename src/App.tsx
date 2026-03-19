@@ -9,6 +9,7 @@ import { Session } from '@supabase/supabase-js';
 import Dashboard from './pages/Dashboard';
 import Statement from './pages/Statement';
 import BalanceHistory from './pages/BalanceHistory';
+import CreditCards from './pages/CreditCards';
 import Auth from './pages/Auth';
 import NotFound from './pages/NotFound';
 
@@ -18,12 +19,8 @@ const App = () => {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
     return () => subscription.unsubscribe();
   }, []);
 
@@ -46,6 +43,7 @@ const App = () => {
             <Route path="/" element={session ? <Dashboard session={session} /> : <Navigate to="/auth" replace />} />
             <Route path="/extrato" element={session ? <Statement session={session} /> : <Navigate to="/auth" replace />} />
             <Route path="/historico" element={session ? <BalanceHistory session={session} /> : <Navigate to="/auth" replace />} />
+            <Route path="/cartoes" element={session ? <CreditCards session={session} /> : <Navigate to="/auth" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
