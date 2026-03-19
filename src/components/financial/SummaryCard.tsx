@@ -45,6 +45,13 @@ export const SummaryCard = ({ title, amount, icon: Icon, variant, subtitle }: Su
     },
   }[variant];
 
+  // ✅ FIX: Determine the correct sign prefix for each variant
+  const getPrefix = () => {
+    if (variant === 'expense') return amount > 0 ? '−' : '';
+    if (variant === 'balance') return amount < 0 ? '−' : '';
+    return ''; // income: never show minus
+  };
+
   return (
     <div className={cn(
       'rounded-2xl border p-5 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5',
@@ -59,7 +66,7 @@ export const SummaryCard = ({ title, amount, icon: Icon, variant, subtitle }: Su
         </div>
       </div>
       <p className={cn('text-2xl font-bold tracking-tight', config.amount)}>
-        {variant === 'expense' && amount > 0 ? '−' : ''}{formattedAmount}
+        {getPrefix()}{formattedAmount}
       </p>
       {subtitle && (
         <p className={cn('text-xs mt-1.5', config.sub)}>{subtitle}</p>
