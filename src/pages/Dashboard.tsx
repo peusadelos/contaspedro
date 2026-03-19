@@ -275,6 +275,11 @@ const Dashboard = ({ session }: DashboardProps) => {
             </span>
             <NewTransactionDialog onAdd={handleAddTransaction} trigger={addTrigger} />
             <Link to="/extrato">
+              <Link to="/cartoes">
+  <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5 hidden sm:flex">
+    Cartões
+  </Button>
+</Link>
               <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5">Extrato</Button>
             </Link>
             <Link to="/historico">
