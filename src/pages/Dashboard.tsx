@@ -204,9 +204,17 @@ const Dashboard = ({ session }: DashboardProps) => {
   };
 
   const transactionsInMonth = transactions.filter(t => t.dueDate.startsWith(selectedMonth));
-  const totalToReceive = transactionsInMonth.filter(t => t.type === 'income' && !t.isPaid).reduce((sum, t) => sum + t.amount, 0);
-  const totalToPay = transactionsInMonth.filter(t => t.type === 'expense' && !t.isPaid).reduce((sum, t) => sum + t.amount, 0);
-  const netBalance = totalToReceive - totalToPay;
+ // Summary cards show ALL transactions (paid + unpaid) for the month
+const totalToReceive = transactionsInMonth
+  .filter(t => t.type === 'income')
+  .reduce((sum, t) => sum + t.amount, 0);
+const totalToPaid = transactionsInMonth
+  .filter(t => t.type === 'income' && t.isPaid)
+  .reduce((sum, t) => sum + t.amount, 0);
+const totalToPay = transactionsInMonth
+  .filter(t => t.type === 'expense')
+  .reduce((sum, t) => sum + t.amount, 0);
+const netBalance = totalToReceive - totalToPay;
   const overdueTransactions = transactionsInMonth.filter(t => getTransactionStatus(t) === 'overdue');
   const overdueAmount = overdueTransactions.reduce((sum, t) => sum + t.amount, 0);
 
@@ -229,8 +237,8 @@ const Dashboard = ({ session }: DashboardProps) => {
 
   const allSelected = pendingTransactions.length > 0 && selectedIds.size === pendingTransactions.length;
   const someSelected = selectedIds.size > 0;
-  const incomeCount = transactionsInMonth.filter(t => t.type === 'income' && !t.isPaid).length;
-  const expenseCount = transactionsInMonth.filter(t => t.type === 'expense' && !t.isPaid).length;
+  const incomeCount = transactionsInMonth.filter(t => t.type === 'income').length;
+  const expenseCount = transactionsInMonth.filter(t => t.type === 'expense').length;
 
   const addTrigger = (
     <Button size="sm" className="h-8 bg-violet-600 hover:bg-violet-700 rounded-lg text-xs gap-1.5 px-2.5 sm:px-3">
@@ -326,13 +334,12 @@ const Dashboard = ({ session }: DashboardProps) => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <SummaryCard title="A receber" amount={totalToReceive} icon={TrendingUp} variant="income"
-            subtitle={`${incomeCount} receita${incomeCount !== 1 ? 's' : ''} pendente${incomeCount !== 1 ? 's' : ''}`} />
-          <SummaryCard title="A pagar" amount={totalToPay} icon={TrendingDown} variant="expense"
-            subtitle={`${expenseCount} despesa${expenseCount !== 1 ? 's' : ''} pendente${expenseCount !== 1 ? 's' : ''}`} />
-          <SummaryCard title="Saldo líquido" amount={netBalance} icon={Wallet} variant="balance"
-            subtitle="Estimativa do mês" />
+       <SummaryCard title="Receitas" amount={totalToReceive} icon={TrendingUp} variant="income"
+  subtitle={`${incomeCount} receita${incomeCount !== 1 ? 's' : ''} no mês`} />
+<SummaryCard title="Despesas" amount={totalToPay} icon={TrendingDown} variant="expense"
+  subtitle={`${expenseCount} despesa${expenseCount !== 1 ? 's' : ''} no mês`} />
+<SummaryCard title="Saldo líquido" amount={netBalance} icon={Wallet} variant="balance"
+  subtitle="Receitas − despesas do mês" />
         </div>
 
         {loading ? (
