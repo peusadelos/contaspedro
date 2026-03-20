@@ -7,6 +7,7 @@ import { TransactionItem } from '@/components/financial/TransactionItem';
 import { CategoryChart } from '@/components/financial/CategoryChart';
 import { NewTransactionDialog } from '@/components/financial/NewTransactionDialog';
 import { DeleteConfirmationDialog } from '@/components/financial/DeleteConfirmationDialog';
+import { PiggyBankWidget } from '@/components/financial/PiggyBankWidget';
 import {
   TrendingUp, TrendingDown, Wallet, AlertTriangle,
   Trash2, ChevronLeft, ChevronRight, LogOut, Plus,
@@ -209,29 +210,18 @@ const Dashboard = ({ session }: DashboardProps) => {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
 
-      {/* ✅ Header — compact with dropdown nav */}
       <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
-
-          {/* Logo */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center">
               <LayoutDashboard className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-base text-slate-900 dark:text-slate-100 tracking-tight hidden sm:block">
-              WeekLeaks
-            </span>
+            <span className="font-bold text-base text-slate-900 dark:text-slate-100 tracking-tight hidden sm:block">WeekLeaks</span>
           </div>
 
-          {/* Right side */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500 dark:text-slate-400 hidden md:block truncate max-w-[160px]">
-              {session.user.email}
-            </span>
-
+            <span className="text-xs text-slate-500 dark:text-slate-400 hidden md:block truncate max-w-[160px]">{session.user.email}</span>
             <NewTransactionDialog onAdd={handleAddTransaction} trigger={addTrigger} />
-
-            {/* ✅ Navigation dropdown — keeps header clean */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5 gap-1.5">
@@ -242,20 +232,17 @@ const Dashboard = ({ session }: DashboardProps) => {
               <DropdownMenuContent align="end" className="w-44">
                 <DropdownMenuItem asChild>
                   <Link to="/extrato" className="flex items-center gap-2 cursor-pointer">
-                    <FileText className="w-4 h-4 text-slate-500" />
-                    Extrato
+                    <FileText className="w-4 h-4 text-slate-500" /> Extrato
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link to="/historico" className="flex items-center gap-2 cursor-pointer">
-                    <History className="w-4 h-4 text-slate-500" />
-                    Histórico
+                    <History className="w-4 h-4 text-slate-500" /> Histórico
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link to="/cartoes" className="flex items-center gap-2 cursor-pointer">
-                    <CreditCard className="w-4 h-4 text-slate-500" />
-                    Cartões
+                    <CreditCard className="w-4 h-4 text-slate-500" /> Cartões
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -264,8 +251,7 @@ const Dashboard = ({ session }: DashboardProps) => {
                   {darkMode ? 'Modo claro' : 'Modo escuro'}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2 cursor-pointer text-rose-600 dark:text-rose-400 focus:text-rose-600">
-                  <LogOut className="w-4 h-4" />
-                  Sair
+                  <LogOut className="w-4 h-4" /> Sair
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -288,7 +274,6 @@ const Dashboard = ({ session }: DashboardProps) => {
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
-
           {overdueTransactions.length > 0 && (
             <div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-400 rounded-xl px-2.5 py-1.5 flex-shrink-0">
               <AlertTriangle className="w-3 h-3 flex-shrink-0" />
@@ -377,10 +362,15 @@ const Dashboard = ({ session }: DashboardProps) => {
               </div>
             </div>
 
-            {/* Chart */}
-            <div className="lg:col-span-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Resumo</h2>
-              <CategoryChart data={expensesByCategory} />
+            {/* Right column: Chart + Piggy Bank */}
+            <div className="lg:col-span-2 space-y-4">
+              <div>
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Resumo</h2>
+                <CategoryChart data={expensesByCategory} />
+              </div>
+
+              {/* ✅ Piggy Bank Widget */}
+              <PiggyBankWidget session={session} />
             </div>
           </div>
         )}
