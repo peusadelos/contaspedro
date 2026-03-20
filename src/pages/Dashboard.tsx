@@ -6,6 +6,7 @@ import { NewTransactionDialog } from '@/components/financial/NewTransactionDialo
 import { DeleteConfirmationDialog } from '@/components/financial/DeleteConfirmationDialog';
 import { PiggyBankWidget } from '@/components/financial/PiggyBankWidget';
 import { Link, useLocation } from 'react-router-dom';
+import { useDarkMode } from '@/hooks/useDarkMode';
 import { toast } from 'sonner';
 import { getTransactionStatus } from '@/lib/financialUtils';
 import {
@@ -23,40 +24,21 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
-// ─── Design tokens ─────────────────────────────────────────────────────────────
 const C = {
-  primary:          '#4F46E5',
-  primaryDark:      '#3730A3',
-  primaryLight:     '#818CF8',
-  tertiary:         '#10B981',
-  error:            '#EF4444',
-  surface:          '#F8F9FF',
-  surfaceLowest:    '#FFFFFF',
-  surfaceLow:       '#EFF4FF',
-  surfaceMid:       '#E5EEFF',
-  surfaceHigh:      '#DCE9FF',
-  onSurface:        '#0F172A',
-  onSurfaceVariant: '#475569',
-  neutral:          '#64748B',
+  primary: '#4F46E5', primaryDark: '#3730A3', primaryLight: '#818CF8',
+  tertiary: '#10B981', error: '#EF4444',
+  surface: '#F8F9FF', surfaceLowest: '#FFFFFF', surfaceLow: '#EFF4FF',
+  surfaceMid: '#E5EEFF', surfaceHigh: '#DCE9FF',
+  onSurface: '#0F172A', onSurfaceVariant: '#475569', neutral: '#64748B',
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const toMonthKey = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-
+const toMonthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const formatMonthLabel = (key: string) => {
   const [y, m] = key.split('-');
-  return new Date(Number(y), Number(m) - 1, 1)
-    .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 };
-
-const fmt = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(v));
-
-const fmtCompact = (v: number) =>
-  new Intl.NumberFormat('pt-BR', {
-    notation: 'compact', style: 'currency', currency: 'BRL', maximumFractionDigits: 1,
-  }).format(v);
+const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(v));
+const fmtCompact = (v: number) => new Intl.NumberFormat('pt-BR', { notation: 'compact', style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).format(v);
 
 const fromSupabase = (row: SupabaseTransaction): Transaction => ({
   id: row.id, description: row.description, amount: row.amount,
@@ -66,7 +48,6 @@ const fromSupabase = (row: SupabaseTransaction): Transaction => ({
   type: row.type as Transaction['type'],
   isPaid: row.is_paid, recurringGroup: row.recurring_group ?? undefined,
 });
-
 const toSupabase = (t: Omit<Transaction, 'id'>, userId: string) => ({
   user_id: userId, description: t.description, amount: t.amount,
   date: t.date, created_date: t.createdDate, due_date: t.dueDate,
@@ -81,78 +62,41 @@ const categoryEmoji: Record<string, string> = {
   'Viagem': '✈️', 'Educação': '🎓', 'Pet': '🐾', 'Saúde': '❤️',
 };
 
-// ─── Bottom Nav Item (mobile only) ────────────────────────────────────────────
-const BottomNavItem = ({ icon, label, to, active }: {
-  icon: React.ReactNode; label: string; to: string; active?: boolean;
-}) => (
-  <Link
-    to={to}
-    className={cn(
-      'flex flex-col items-center justify-center px-4 py-2 rounded-2xl transition-all duration-200 active:scale-90 gap-0.5',
-      active
-        ? 'text-[#4F46E5] dark:text-indigo-300'
-        : 'text-slate-500 dark:text-slate-400 hover:text-[#4F46E5] dark:hover:text-indigo-300'
-    )}
-    style={active ? { background: C.surfaceLow } : {}}
-  >
+const BottomNavItem = ({ icon, label, to, active }: { icon: React.ReactNode; label: string; to: string; active?: boolean }) => (
+  <Link to={to} className={cn('flex flex-col items-center justify-center px-4 py-2 rounded-2xl transition-all duration-200 active:scale-90 gap-0.5', active ? 'text-[#4F46E5] dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400 hover:text-[#4F46E5]')} style={active ? { background: C.surfaceLow } : {}}>
     {icon}
     <span className="text-[10px] font-semibold uppercase tracking-wider">{label}</span>
   </Link>
 );
 
-// ─── Transaction Row ───────────────────────────────────────────────────────────
-const TxRow = ({ transaction, onTogglePaid, onEdit, onDelete }: {
-  transaction: Transaction;
-  onTogglePaid: (id: string) => void;
-  onEdit: (t: Transaction) => void;
-  onDelete: (t: Transaction) => void;
-}) => {
+const TxRow = ({ transaction, onTogglePaid, onEdit, onDelete }: { transaction: Transaction; onTogglePaid: (id: string) => void; onEdit: (t: Transaction) => void; onDelete: (t: Transaction) => void }) => {
   const isIncome = transaction.type === 'income';
   const emoji = categoryEmoji[transaction.category] || '📌';
-  const date = new Date(transaction.dueDate + 'T12:00:00')
-    .toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  const date = new Date(transaction.dueDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
   const status = getTransactionStatus(transaction);
-
   const statusBadge: Record<string, string> = {
     overdue: 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50',
     pending: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50',
-    future:  'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50',
-    paid:    'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50',
+    future: 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50',
+    paid: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50',
   };
-
-  const statusLabel: Record<string, string> = {
-    overdue: 'Atrasado', pending: 'Pendente', future: 'Futuro', paid: 'Pago',
-  };
-
+  const statusLabel: Record<string, string> = { overdue: 'Atrasado', pending: 'Pendente', future: 'Futuro', paid: 'Pago' };
   return (
     <div className="flex items-center gap-3 p-3.5 rounded-xl border border-border bg-card hover:bg-accent/30 transition-all duration-150 group">
-      <div className={cn(
-        'w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base',
-        isIncome ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-slate-100 dark:bg-slate-800/60'
-      )}>
-        {emoji}
-      </div>
+      <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base', isIncome ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-slate-100 dark:bg-slate-800/60')}>{emoji}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-semibold text-foreground truncate">{transaction.description}</p>
-          <p className={cn('text-sm font-bold flex-shrink-0',
-            isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
-            {isIncome ? '+' : '−'}{fmt(transaction.amount)}
-          </p>
+          <p className={cn('text-sm font-bold flex-shrink-0', isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>{isIncome ? '+' : '−'}{fmt(transaction.amount)}</p>
         </div>
         <div className="flex items-center justify-between mt-0.5 flex-wrap gap-1">
           <p className="text-xs text-muted-foreground">{transaction.category} · {date}</p>
           <div className="flex items-center gap-1.5">
-            <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium', statusBadge[status] || statusBadge.pending)}>
-              {statusLabel[status] || status}
-            </span>
+            <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium', statusBadge[status] || statusBadge.pending)}>{statusLabel[status] || status}</span>
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={e => { e.stopPropagation(); onTogglePaid(transaction.id); }}
-                className="h-6 w-6 flex items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-xs font-bold">✓</button>
-              <button onClick={e => { e.stopPropagation(); onEdit(transaction); }}
-                className="h-6 w-6 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-accent text-xs">✎</button>
-              <button onClick={e => { e.stopPropagation(); onDelete(transaction); }}
-                className="h-6 w-6 flex items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-xs">✕</button>
+              <button onClick={e => { e.stopPropagation(); onTogglePaid(transaction.id); }} className="h-6 w-6 flex items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-xs font-bold">✓</button>
+              <button onClick={e => { e.stopPropagation(); onEdit(transaction); }} className="h-6 w-6 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-accent text-xs">✎</button>
+              <button onClick={e => { e.stopPropagation(); onDelete(transaction); }} className="h-6 w-6 flex items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-xs">✕</button>
             </div>
           </div>
         </div>
@@ -161,11 +105,12 @@ const TxRow = ({ transaction, onTogglePaid, onEdit, onDelete }: {
   );
 };
 
-// ─── Main ──────────────────────────────────────────────────────────────────────
 interface DashboardProps { session: Session; }
 
 export default function Dashboard({ session }: DashboardProps) {
   const location = useLocation();
+  const { darkMode, toggleDarkMode } = useDarkMode(); // ✅ shared hook
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(toMonthKey(new Date()));
@@ -174,20 +119,6 @@ export default function Dashboard({ session }: DashboardProps) {
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
-
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark') ||
-        localStorage.getItem('theme') === 'dark' ||
-        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    if (darkMode) { document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark'); }
-    else { document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light'); }
-  }, [darkMode]);
 
   useEffect(() => {
     const load = async () => {
@@ -208,12 +139,12 @@ export default function Dashboard({ session }: DashboardProps) {
     if (error) { toast.error('Erro ao adicionar'); return; }
     const added = (data as SupabaseTransaction[]).map(fromSupabase);
     setTransactions(prev => [...added, ...prev]);
-    toast.success(added.length > 1 ? `${added.length} transações criadas!` : 'Transação adicionada!');
+    toast.success(added.length > 1 ? `${added.length} criadas!` : 'Adicionada!');
   };
 
   const handleEdit = async (tx: Transaction) => {
     const { error } = await supabase.from('transactions').update(toSupabase(tx, session.user.id)).eq('id', tx.id);
-    if (error) { toast.error('Erro ao editar'); return; }
+    if (error) { toast.error('Erro'); return; }
     setTransactions(prev => prev.map(t => t.id === tx.id ? tx : t));
     setEditingTransaction(undefined);
     toast.success('Atualizada!');
@@ -238,13 +169,7 @@ export default function Dashboard({ session }: DashboardProps) {
     toast.success('Status atualizado!');
   };
 
-  const handleToggleSelect = (id: string) => {
-    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  };
-
-  const handleSelectAll = () => {
-    setSelectedIds(selectedIds.size === pendingTx.length ? new Set() : new Set(pendingTx.map(t => t.id)));
-  };
+  const handleSelectAll = () => setSelectedIds(selectedIds.size === pendingTx.length ? new Set() : new Set(pendingTx.map(t => t.id)));
 
   const handleBulkDelete = async () => {
     const ids = Array.from(selectedIds);
@@ -261,7 +186,6 @@ export default function Dashboard({ session }: DashboardProps) {
     setSelectedMonth(toMonthKey(new Date(y, m - 1 + (dir === 'next' ? 1 : -1), 1)));
   };
 
-  // Derived
   const txMonth = transactions.filter(t => t.dueDate.startsWith(selectedMonth));
   const totalIncome  = txMonth.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = txMonth.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
@@ -270,21 +194,11 @@ export default function Dashboard({ session }: DashboardProps) {
   const expenseCount = txMonth.filter(t => t.type === 'expense').length;
   const overdueCount = txMonth.filter(t => getTransactionStatus(t) === 'overdue').length;
 
-  const pendingTx = txMonth
-    .filter(t => {
-      if (t.isPaid) return false;
-      if (statusFilter === 'all') return true;
-      return getTransactionStatus(t) === statusFilter;
-    })
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  const pendingTx = txMonth.filter(t => { if (t.isPaid) return false; if (statusFilter === 'all') return true; return getTransactionStatus(t) === statusFilter; }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
-  const expByCat = txMonth.filter(t => t.type === 'expense').reduce((acc, t) => {
-    acc[t.category] = (acc[t.category] || 0) + t.amount;
-    return acc;
-  }, {} as Record<string, number>);
+  const expByCat = txMonth.filter(t => t.type === 'expense').reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {} as Record<string, number>);
   const totalExp = Object.values(expByCat).reduce((s, v) => s + v, 0);
   const topCats  = Object.entries(expByCat).sort((a, b) => b[1] - a[1]).slice(0, 3);
-
   const DONUT_COLORS = [C.primary, C.tertiary, C.primaryLight];
   let donutOffset = 25;
   const segments = topCats.map(([cat, val], i) => {
@@ -297,73 +211,41 @@ export default function Dashboard({ session }: DashboardProps) {
   const allSelected = pendingTx.length > 0 && selectedIds.size === pendingTx.length;
   const someSelected = selectedIds.size > 0;
 
-  const addTrigger = (
-    <Button size="sm" className="h-8 bg-violet-600 hover:bg-violet-700 rounded-lg text-xs gap-1.5 px-2.5 sm:px-3">
-      <Plus className="w-3.5 h-3.5 flex-shrink-0" />
-      <span className="hidden sm:inline">Nova Transação</span>
-    </Button>
-  );
-
   return (
-    // ✅ pb-20 on mobile for bottom nav, no padding on desktop
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 sm:pb-0">
 
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
-
-          {/* Logo */}
           <div className="flex items-center gap-2.5 flex-shrink-0">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-sm"
-              style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})` }}>
-              W
-            </div>
-            <span className="font-bold text-base text-slate-900 dark:text-slate-100 tracking-tight hidden sm:block">
-              WeekLeaks
-            </span>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-sm" style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})` }}>W</div>
+            <span className="font-bold text-base text-slate-900 dark:text-slate-100 tracking-tight hidden sm:block">WeekLeaks</span>
           </div>
-
-          {/* Right: actions + hamburger (desktop only) */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500 dark:text-slate-400 hidden md:block truncate max-w-[160px]">
-              {session.user.email}
-            </span>
-
-            <NewTransactionDialog onAdd={handleAdd} trigger={addTrigger} />
-
-            {/* ✅ Hamburger menu — ONLY on desktop (hidden on mobile) */}
-            <div className="hidden sm:flex items-center gap-1.5">
+            <span className="text-xs text-slate-500 dark:text-slate-400 hidden md:block truncate max-w-[160px]">{session.user.email}</span>
+            <NewTransactionDialog onAdd={handleAdd} trigger={
+              <Button size="sm" className="h-8 bg-violet-600 hover:bg-violet-700 rounded-lg text-xs gap-1.5 px-2.5 sm:px-3">
+                <Plus className="w-3.5 h-3.5 flex-shrink-0" /><span className="hidden sm:inline">Nova Transação</span>
+              </Button>
+            } />
+            {/* Hamburger — desktop only */}
+            <div className="hidden sm:flex">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5 gap-1.5">
-                    <Menu className="w-3.5 h-3.5" />
-                    <span>Menu</span>
+                    <Menu className="w-3.5 h-3.5" /><span>Menu</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuItem asChild>
-                    <Link to="/extrato" className="flex items-center gap-2 cursor-pointer">
-                      <FileText className="w-4 h-4 text-slate-500" /> Extrato
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/historico" className="flex items-center gap-2 cursor-pointer">
-                      <History className="w-4 h-4 text-slate-500" /> Histórico
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/cartoes" className="flex items-center gap-2 cursor-pointer">
-                      <CreditCard className="w-4 h-4 text-slate-500" /> Cartões
-                    </Link>
-                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link to="/extrato" className="flex items-center gap-2 cursor-pointer"><FileText className="w-4 h-4 text-slate-500" /> Extrato</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link to="/historico" className="flex items-center gap-2 cursor-pointer"><History className="w-4 h-4 text-slate-500" /> Histórico</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link to="/cartoes" className="flex items-center gap-2 cursor-pointer"><CreditCard className="w-4 h-4 text-slate-500" /> Cartões</Link></DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setDarkMode(!darkMode)} className="flex items-center gap-2 cursor-pointer">
+                  {/* ✅ Dark mode toggle */}
+                  <DropdownMenuItem onClick={toggleDarkMode} className="flex items-center gap-2 cursor-pointer">
                     {darkMode ? <Sun className="w-4 h-4 text-slate-500" /> : <Moon className="w-4 h-4 text-slate-500" />}
                     {darkMode ? 'Modo claro' : 'Modo escuro'}
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => supabase.auth.signOut()}
-                    className="flex items-center gap-2 cursor-pointer text-rose-600 dark:text-rose-400 focus:text-rose-600">
+                  <DropdownMenuItem onClick={() => supabase.auth.signOut()} className="flex items-center gap-2 cursor-pointer text-rose-600 dark:text-rose-400 focus:text-rose-600">
                     <LogOut className="w-4 h-4" /> Sair
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -373,61 +255,27 @@ export default function Dashboard({ session }: DashboardProps) {
         </div>
       </header>
 
-      {/* ── Main Content ─────────────────────────────────────────────────────── */}
       <main className="max-w-6xl mx-auto px-3 sm:px-6 py-5 space-y-5">
-
         {/* Hero Card */}
-        <div
-          className="rounded-2xl p-6 sm:p-8 text-white relative overflow-hidden"
-          style={{
-            background: `linear-gradient(135deg, ${C.primary} 0%, ${C.primaryDark} 100%)`,
-            boxShadow: `0 20px 40px ${C.primary}26`,
-          }}
-        >
-          <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full opacity-10"
-            style={{ background: 'white', filter: 'blur(32px)' }} />
-          <div className="absolute -bottom-8 -left-8 w-40 h-40 rounded-full opacity-10"
-            style={{ background: C.tertiary, filter: 'blur(28px)' }} />
-
+        <div className="rounded-2xl p-6 sm:p-8 text-white relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${C.primary} 0%, ${C.primaryDark} 100%)`, boxShadow: `0 20px 40px ${C.primary}26` }}>
+          <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full opacity-10" style={{ background: 'white', filter: 'blur(32px)' }} />
+          <div className="absolute -bottom-8 -left-8 w-40 h-40 rounded-full opacity-10" style={{ background: C.tertiary, filter: 'blur(28px)' }} />
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <button onClick={() => navigateMonth('prev')} className="opacity-60 hover:opacity-100 transition-opacity">
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <span className="text-xs font-semibold uppercase tracking-widest opacity-70 capitalize">
-                  {formatMonthLabel(selectedMonth)}
-                </span>
-                <button onClick={() => navigateMonth('next')} className="opacity-60 hover:opacity-100 transition-opacity">
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                <button onClick={() => navigateMonth('prev')} className="opacity-60 hover:opacity-100 transition-opacity"><ChevronLeft className="w-4 h-4" /></button>
+                <span className="text-xs font-semibold uppercase tracking-widest opacity-70 capitalize">{formatMonthLabel(selectedMonth)}</span>
+                <button onClick={() => navigateMonth('next')} className="opacity-60 hover:opacity-100 transition-opacity"><ChevronRight className="w-4 h-4" /></button>
               </div>
               <p className="text-xs font-semibold uppercase tracking-widest opacity-60 mb-1">Saldo Líquido</p>
-              <h2 className="font-extrabold tracking-tight mb-4 text-4xl sm:text-5xl leading-none">
-                {netBalance < 0 ? '−' : ''}{fmt(netBalance)}
-              </h2>
+              <h2 className="font-extrabold tracking-tight mb-4 text-4xl sm:text-5xl leading-none">{netBalance < 0 ? '−' : ''}{fmt(netBalance)}</h2>
               <div className="flex flex-wrap gap-2">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }}>
-                  <TrendingUp className="w-3 h-3" />
-                  <span className="text-xs font-medium opacity-80">Receitas</span>
-                  <span className="text-xs font-bold">{fmt(totalIncome)}</span>
-                </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }}>
-                  <Minus className="w-3 h-3" />
-                  <span className="text-xs font-medium opacity-80">Despesas</span>
-                  <span className="text-xs font-bold">{fmt(totalExpense)}</span>
-                </div>
-                {overdueCount > 0 && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(239,68,68,0.25)' }}>
-                    <AlertTriangle className="w-3 h-3 text-red-300" />
-                    <span className="text-xs font-semibold text-red-200">{overdueCount} atrasado{overdueCount > 1 ? 's' : ''}</span>
-                  </div>
-                )}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }}><TrendingUp className="w-3 h-3" /><span className="text-xs opacity-80">Receitas</span><span className="text-xs font-bold">{fmt(totalIncome)}</span></div>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }}><Minus className="w-3 h-3" /><span className="text-xs opacity-80">Despesas</span><span className="text-xs font-bold">{fmt(totalExpense)}</span></div>
+                {overdueCount > 0 && (<div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(239,68,68,0.25)' }}><AlertTriangle className="w-3 h-3 text-red-300" /><span className="text-xs font-semibold text-red-200">{overdueCount} atrasado{overdueCount > 1 ? 's' : ''}</span></div>)}
               </div>
             </div>
-            <Link to="/extrato"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 w-fit"
-              style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', color: '#fff' }}>
+            <Link to="/extrato" className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 w-fit" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', color: '#fff' }}>
               Ver Extrato <ChevronRightIcon className="w-4 h-4" />
             </Link>
           </div>
@@ -436,47 +284,33 @@ export default function Dashboard({ session }: DashboardProps) {
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
-            { title: 'Receitas', amount: totalIncome, icon: TrendingUp, variant: 'income' as const, sub: `${incomeCount} receita${incomeCount !== 1 ? 's' : ''} no mês` },
-            { title: 'Despesas', amount: totalExpense, icon: TrendingDown, variant: 'expense' as const, sub: `${expenseCount} despesa${expenseCount !== 1 ? 's' : ''} no mês` },
-            { title: 'Saldo Líquido', amount: netBalance, icon: Wallet, variant: 'balance' as const, sub: 'Receitas − despesas do mês' },
-          ].map(({ title, amount, icon: Icon, variant, sub }) => {
-            const cfg = {
-              income:  { bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-800/50', iconBg: 'bg-emerald-100 dark:bg-emerald-900/50', iconC: 'text-emerald-600 dark:text-emerald-400', label: 'text-emerald-700 dark:text-emerald-400', amt: 'text-emerald-800 dark:text-emerald-300', sub: 'text-emerald-600/70 dark:text-emerald-500/70' },
-              expense: { bg: 'bg-rose-50 dark:bg-rose-950/30', border: 'border-rose-200 dark:border-rose-800/50', iconBg: 'bg-rose-100 dark:bg-rose-900/50', iconC: 'text-rose-600 dark:text-rose-400', label: 'text-rose-700 dark:text-rose-400', amt: 'text-rose-800 dark:text-rose-300', sub: 'text-rose-600/70 dark:text-rose-500/70' },
-              balance: { bg: 'bg-violet-50 dark:bg-violet-950/30', border: 'border-violet-200 dark:border-violet-800/50', iconBg: 'bg-violet-100 dark:bg-violet-900/50', iconC: 'text-violet-600 dark:text-violet-400', label: 'text-violet-700 dark:text-violet-400', amt: 'text-violet-800 dark:text-violet-300', sub: 'text-violet-600/70 dark:text-violet-500/70' },
-            }[variant];
-            const prefix = variant === 'expense' && amount > 0 ? '−' : variant === 'balance' && amount < 0 ? '−' : '';
-            return (
-              <div key={title} className={cn('rounded-2xl border p-5 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5', cfg.bg, cfg.border)}>
-                <div className="flex items-start justify-between mb-3">
-                  <p className={cn('text-xs font-semibold uppercase tracking-wider', cfg.label)}>{title}</p>
-                  <div className={cn('p-2 rounded-xl', cfg.iconBg)}><Icon className={cn('w-4 h-4', cfg.iconC)} /></div>
-                </div>
-                <p className={cn('text-2xl font-bold tracking-tight', cfg.amt)}>{prefix}{fmt(amount)}</p>
-                <p className={cn('text-xs mt-1.5', cfg.sub)}>{sub}</p>
+            { title: 'Receitas', amount: totalIncome, icon: TrendingUp, cls: { bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-800/50', iB: 'bg-emerald-100 dark:bg-emerald-900/50', iC: 'text-emerald-600 dark:text-emerald-400', lbl: 'text-emerald-700 dark:text-emerald-400', amt: 'text-emerald-800 dark:text-emerald-300', sub: 'text-emerald-600/70 dark:text-emerald-500/70' }, sub: `${incomeCount} receita${incomeCount !== 1 ? 's' : ''} no mês`, prefix: '' },
+            { title: 'Despesas', amount: totalExpense, icon: TrendingDown, cls: { bg: 'bg-rose-50 dark:bg-rose-950/30', border: 'border-rose-200 dark:border-rose-800/50', iB: 'bg-rose-100 dark:bg-rose-900/50', iC: 'text-rose-600 dark:text-rose-400', lbl: 'text-rose-700 dark:text-rose-400', amt: 'text-rose-800 dark:text-rose-300', sub: 'text-rose-600/70 dark:text-rose-500/70' }, sub: `${expenseCount} despesa${expenseCount !== 1 ? 's' : ''} no mês`, prefix: totalExpense > 0 ? '−' : '' },
+            { title: 'Saldo Líquido', amount: netBalance, icon: Wallet, cls: { bg: 'bg-violet-50 dark:bg-violet-950/30', border: 'border-violet-200 dark:border-violet-800/50', iB: 'bg-violet-100 dark:bg-violet-900/50', iC: 'text-violet-600 dark:text-violet-400', lbl: 'text-violet-700 dark:text-violet-400', amt: 'text-violet-800 dark:text-violet-300', sub: 'text-violet-600/70 dark:text-violet-500/70' }, sub: 'Receitas − despesas do mês', prefix: netBalance < 0 ? '−' : '' },
+          ].map(({ title, amount, icon: Icon, cls, sub, prefix }) => (
+            <div key={title} className={cn('rounded-2xl border p-5 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5', cls.bg, cls.border)}>
+              <div className="flex items-start justify-between mb-3">
+                <p className={cn('text-xs font-semibold uppercase tracking-wider', cls.lbl)}>{title}</p>
+                <div className={cn('p-2 rounded-xl', cls.iB)}><Icon className={cn('w-4 h-4', cls.iC)} /></div>
               </div>
-            );
-          })}
+              <p className={cn('text-2xl font-bold tracking-tight', cls.amt)}>{prefix}{fmt(amount)}</p>
+              <p className={cn('text-xs mt-1.5', cls.sub)}>{sub}</p>
+            </div>
+          ))}
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-24">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-8 h-8 rounded-full border-2 border-violet-600 border-t-transparent animate-spin" />
-              <p className="text-sm text-slate-500">Carregando...</p>
-            </div>
+            <div className="w-8 h-8 rounded-full border-2 border-violet-600 border-t-transparent animate-spin" />
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-
-            {/* Pending Transactions */}
+            {/* Pending */}
             <div className="lg:col-span-3 space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Pendentes</h2>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[130px] h-7 text-xs rounded-lg border-slate-200 dark:border-slate-700">
-                    <SelectValue placeholder="Filtrar" />
-                  </SelectTrigger>
+                  <SelectTrigger className="w-[130px] h-7 text-xs rounded-lg border-slate-200 dark:border-slate-700"><SelectValue placeholder="Filtrar" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="overdue">🔴 Atrasados</SelectItem>
@@ -485,32 +319,21 @@ export default function Dashboard({ session }: DashboardProps) {
                   </SelectContent>
                 </Select>
               </div>
-
               {pendingTx.length > 0 && (
                 <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-2">
                     <input type="checkbox" checked={allSelected} onChange={handleSelectAll} className="w-4 h-4 cursor-pointer accent-violet-600" />
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                      {someSelected ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}
-                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{someSelected ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}</span>
                   </div>
-                  {someSelected && (
-                    <Button size="sm" variant="destructive" onClick={() => setShowBulkDeleteConfirm(true)} className="h-6 text-xs gap-1 px-2.5">
-                      <Trash2 className="w-3 h-3" /> Excluir {selectedIds.size}
-                    </Button>
-                  )}
+                  {someSelected && (<Button size="sm" variant="destructive" onClick={() => setShowBulkDeleteConfirm(true)} className="h-6 text-xs gap-1 px-2.5"><Trash2 className="w-3 h-3" /> Excluir {selectedIds.size}</Button>)}
                 </div>
               )}
-
               <div className="space-y-2">
                 {pendingTx.length > 0 ? pendingTx.map(tx => (
-                  <TxRow key={tx.id} transaction={tx}
-                    onTogglePaid={handleToggle} onEdit={setEditingTransaction} onDelete={setDeletingTransaction} />
+                  <TxRow key={tx.id} transaction={tx} onTogglePaid={handleToggle} onEdit={setEditingTransaction} onDelete={setDeletingTransaction} />
                 )) : (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
-                      <Plus className="w-5 h-5 text-slate-400" />
-                    </div>
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3"><Plus className="w-5 h-5 text-slate-400" /></div>
                     <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Nenhuma transação pendente</p>
                     <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 capitalize">{formatMonthLabel(selectedMonth)}</p>
                   </div>
@@ -521,8 +344,6 @@ export default function Dashboard({ session }: DashboardProps) {
             {/* Right column */}
             <div className="lg:col-span-2 space-y-4">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Resumo</h2>
-
-              {/* Donut */}
               <div className="rounded-2xl border border-border bg-card p-5">
                 <div className="flex justify-between items-center mb-4">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Despesas</p>
@@ -536,12 +357,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       <svg viewBox="0 0 36 36" className="w-full h-full">
                         <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#EFF4FF" strokeWidth="3.5" />
                         {segments.map((seg, i) => (
-                          <circle key={i} cx="18" cy="18" r="15.915" fill="transparent"
-                            stroke={seg.color} strokeWidth="3.5"
-                            strokeDasharray={`${seg.pct} ${100 - seg.pct}`}
-                            strokeDashoffset={seg.offset}
-                            style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 0.5s' }}
-                          />
+                          <circle key={i} cx="18" cy="18" r="15.915" fill="transparent" stroke={seg.color} strokeWidth="3.5" strokeDasharray={`${seg.pct} ${100 - seg.pct}`} strokeDashoffset={seg.offset} style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 0.5s' }} />
                         ))}
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -556,67 +372,35 @@ export default function Dashboard({ session }: DashboardProps) {
                             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: seg.color }} />
                             <span className="text-xs text-muted-foreground truncate">{seg.cat}</span>
                           </div>
-                          <span className="text-xs font-bold text-foreground flex-shrink-0">
-                            {totalExp > 0 ? Math.round((seg.val / totalExp) * 100) : 0}%
-                          </span>
+                          <span className="text-xs font-bold text-foreground flex-shrink-0">{totalExp > 0 ? Math.round((seg.val / totalExp) * 100) : 0}%</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
               </div>
-
-              {/* Piggy bank */}
               <PiggyBankWidget session={session} />
             </div>
           </div>
         )}
       </main>
 
-      {/* ── Bottom Navigation — ONLY on mobile (hidden sm:hidden) ────────────── */}
-      <nav className={cn(
-        'fixed bottom-0 left-0 w-full z-50',
-        'flex sm:hidden', // ✅ visible on mobile, hidden on desktop
-        'justify-around items-center px-4 pb-6 pt-3 rounded-t-3xl',
-        'bg-white/88 dark:bg-slate-900/88 backdrop-blur-xl',
-      )}
-        style={{
-          borderTop: `1px solid rgba(15,23,42,0.06)`,
-          boxShadow: '0 -8px 32px rgba(15,23,42,0.07)',
-        }}
-      >
+      {/* Bottom Nav — mobile only */}
+      <nav className="fixed bottom-0 left-0 w-full z-50 flex sm:hidden justify-around items-center px-4 pb-6 pt-3 rounded-t-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl" style={{ borderTop: '1px solid rgba(15,23,42,0.06)', boxShadow: '0 -8px 32px rgba(15,23,42,0.07)' }}>
         <BottomNavItem to="/" active={location.pathname === '/'} icon={<LayoutGrid className="w-5 h-5" />} label="Home" />
         <BottomNavItem to="/extrato" active={location.pathname === '/extrato'} icon={<Receipt className="w-5 h-5" />} label="Extrato" />
         <BottomNavItem to="/cartoes" active={location.pathname === '/cartoes'} icon={<CreditCard className="w-5 h-5" />} label="Cartões" />
         <BottomNavItem to="/historico" active={location.pathname === '/historico'} icon={<TrendingUp className="w-5 h-5" />} label="Histórico" />
-
-        {/* Dark mode + logout on mobile (since no hamburger) */}
-        <button
-          onClick={() => setDarkMode(!darkMode)}
-          className="flex flex-col items-center justify-center px-4 py-2 gap-0.5 text-slate-500 dark:text-slate-400 hover:text-violet-600 dark:hover:text-violet-300 transition-colors active:scale-90"
-        >
+        {/* ✅ Dark mode on mobile */}
+        <button onClick={toggleDarkMode} className="flex flex-col items-center justify-center px-4 py-2 gap-0.5 text-slate-500 dark:text-slate-400 transition-colors active:scale-90">
           {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           <span className="text-[10px] font-semibold uppercase tracking-wider">Tema</span>
         </button>
       </nav>
 
-      {/* Dialogs */}
-      {editingTransaction && (
-        <NewTransactionDialog transaction={editingTransaction} onEdit={handleEdit} trigger={<div />} />
-      )}
-      <DeleteConfirmationDialog
-        open={!!deletingTransaction}
-        onOpenChange={open => !open && setDeletingTransaction(null)}
-        transaction={deletingTransaction}
-        onConfirm={handleDelete}
-      />
-      <DeleteConfirmationDialog
-        open={showBulkDeleteConfirm}
-        onOpenChange={open => !open && setShowBulkDeleteConfirm(false)}
-        transaction={null}
-        customMessage={`Tem certeza que deseja excluir ${selectedIds.size} transação(ões)?`}
-        onConfirm={handleBulkDelete}
-      />
+      {editingTransaction && (<NewTransactionDialog transaction={editingTransaction} onEdit={handleEdit} trigger={<div />} />)}
+      <DeleteConfirmationDialog open={!!deletingTransaction} onOpenChange={open => !open && setDeletingTransaction(null)} transaction={deletingTransaction} onConfirm={handleDelete} />
+      <DeleteConfirmationDialog open={showBulkDeleteConfirm} onOpenChange={open => !open && setShowBulkDeleteConfirm(false)} transaction={null} customMessage={`Excluir ${selectedIds.size} transação(ões)?`} onConfirm={handleBulkDelete} />
     </div>
   );
 }
