@@ -9,51 +9,38 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getTransactionStatus } from '@/lib/financialUtils';
 import {
-  Plus, Minus, TrendingUp, ChevronLeft, ChevronRight,
-  CreditCard, LayoutGrid, Receipt, LogOut, ChevronRight as ChevronRightIcon,
-  AlertTriangle
+  Plus, Minus, TrendingUp, TrendingDown, Wallet,
+  ChevronLeft, ChevronRight, CreditCard, LayoutGrid,
+  Receipt, LogOut, Moon, Sun, Menu, FileText,
+  History, AlertTriangle, ChevronRight as ChevronRightIcon,
+  Trash2
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 // ─── Design tokens ─────────────────────────────────────────────────────────────
-// Updated to match Stitch style guide: Primary #4F46E5, Secondary #1E293B,
-// Tertiary #10B981, Neutral #64748B
 const C = {
-  // Primary — indigo
-  primary:              '#4F46E5',
-  primaryDark:          '#3730A3',
-  primaryLight:         '#818CF8',
-  primaryBg:            '#EEF2FF',
-
-  // Secondary — dark navy
-  secondary:            '#1E293B',
-  secondaryMid:         '#334155',
-  secondaryLight:       '#64748B',
-
-  // Tertiary — emerald (positive/income)
-  tertiary:             '#10B981',
-  tertiaryDark:         '#059669',
-  tertiaryBg:           '#D1FAE5',
-
-  // Neutral — slate
-  neutral:              '#64748B',
-  neutralLight:         '#94A3B8',
-  neutralBg:            '#F1F5F9',
-
-  // Error — red (expense/negative)
-  error:                '#EF4444',
-  errorBg:              '#FEE2E2',
-
-  // Surfaces — light blue-tinted layers
-  surface:              '#F8F9FF',
-  surfaceLowest:        '#FFFFFF',
-  surfaceLow:           '#EFF4FF',
-  surfaceMid:           '#E5EEFF',
-  surfaceHigh:          '#DCE9FF',
-
-  // Text
-  onSurface:            '#0F172A',
-  onSurfaceVariant:     '#475569',
-  onPrimary:            '#FFFFFF',
+  primary:          '#4F46E5',
+  primaryDark:      '#3730A3',
+  primaryLight:     '#818CF8',
+  primaryBg:        '#EEF2FF',
+  tertiary:         '#10B981',
+  tertiaryDark:     '#059669',
+  tertiaryBg:       '#D1FAE5',
+  error:            '#EF4444',
+  errorBg:          '#FEE2E2',
+  surface:          '#F8F9FF',
+  surfaceLowest:    '#FFFFFF',
+  surfaceLow:       '#EFF4FF',
+  surfaceMid:       '#E5EEFF',
+  surfaceHigh:      '#DCE9FF',
+  onSurface:        '#0F172A',
+  onSurfaceVariant: '#475569',
+  neutral:          '#64748B',
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,7 +57,9 @@ const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(v));
 
 const fmtCompact = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { notation: 'compact', style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).format(v);
+  new Intl.NumberFormat('pt-BR', {
+    notation: 'compact', style: 'currency', currency: 'BRL', maximumFractionDigits: 1,
+  }).format(v);
 
 const fromSupabase = (row: SupabaseTransaction): Transaction => ({
   id: row.id, description: row.description, amount: row.amount,
@@ -95,20 +84,34 @@ const categoryEmoji: Record<string, string> = {
   'Viagem': '✈️', 'Educação': '🎓', 'Pet': '🐾', 'Saúde': '❤️',
 };
 
-// ─── Bottom Nav Item ───────────────────────────────────────────────────────────
-const NavItem = ({ icon, label, active, to }: {
-  icon: React.ReactNode; label: string; active?: boolean; to: string;
-}) => (
-  <Link to={to} className="flex flex-col items-center justify-center px-5 py-2 rounded-2xl transition-all duration-200 active:scale-90"
-    style={{
-      background: active ? C.surfaceLow : 'transparent',
-      color: active ? C.primary : C.neutral,
-      fontFamily: 'Inter',
-    }}>
-    {icon}
-    <span className="text-[10px] font-semibold uppercase tracking-wider mt-1">{label}</span>
-  </Link>
-);
+// ─── Summary Card ──────────────────────────────────────────────────────────────
+const SummaryCard = ({ title, amount, icon: Icon, variant, subtitle }: {
+  title: string; amount: number; icon: any;
+  variant: 'income' | 'expense' | 'balance'; subtitle?: string;
+}) => {
+  const configs = {
+    income:  { bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-800/50', iconBg: 'bg-emerald-100 dark:bg-emerald-900/50', iconColor: 'text-emerald-600 dark:text-emerald-400', label: 'text-emerald-700 dark:text-emerald-400', amount: 'text-emerald-800 dark:text-emerald-300', sub: 'text-emerald-600/70 dark:text-emerald-500/70' },
+    expense: { bg: 'bg-rose-50 dark:bg-rose-950/30', border: 'border-rose-200 dark:border-rose-800/50', iconBg: 'bg-rose-100 dark:bg-rose-900/50', iconColor: 'text-rose-600 dark:text-rose-400', label: 'text-rose-700 dark:text-rose-400', amount: 'text-rose-800 dark:text-rose-300', sub: 'text-rose-600/70 dark:text-rose-500/70' },
+    balance: { bg: 'bg-violet-50 dark:bg-violet-950/30', border: 'border-violet-200 dark:border-violet-800/50', iconBg: 'bg-violet-100 dark:bg-violet-900/50', iconColor: 'text-violet-600 dark:text-violet-400', label: 'text-violet-700 dark:text-violet-400', amount: 'text-violet-800 dark:text-violet-300', sub: 'text-violet-600/70 dark:text-violet-500/70' },
+  }[variant];
+
+  const prefix = variant === 'expense' && amount > 0 ? '−' : variant === 'balance' && amount < 0 ? '−' : '';
+
+  return (
+    <div className={`rounded-2xl border p-5 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${configs.bg} ${configs.border}`}>
+      <div className="flex items-start justify-between mb-3">
+        <p className={`text-xs font-semibold uppercase tracking-wider ${configs.label}`}>{title}</p>
+        <div className={`p-2 rounded-xl ${configs.iconBg}`}>
+          <Icon className={`w-4 h-4 ${configs.iconColor}`} />
+        </div>
+      </div>
+      <p className={`text-2xl font-bold tracking-tight ${configs.amount}`}>
+        {prefix}{fmt(amount)}
+      </p>
+      {subtitle && <p className={`text-xs mt-1.5 ${configs.sub}`}>{subtitle}</p>}
+    </div>
+  );
+};
 
 // ─── Transaction Row ───────────────────────────────────────────────────────────
 const TxRow = ({ transaction, onTogglePaid, onEdit, onDelete }: {
@@ -121,66 +124,51 @@ const TxRow = ({ transaction, onTogglePaid, onEdit, onDelete }: {
   const emoji = categoryEmoji[transaction.category] || '📌';
   const date = new Date(transaction.dueDate + 'T12:00:00')
     .toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  const status = getTransactionStatus(transaction);
+
+  const statusStyles: Record<string, string> = {
+    overdue:  'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50',
+    pending:  'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50',
+    future:   'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50',
+    paid:     'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50',
+  };
+
+  const statusLabels: Record<string, string> = {
+    overdue: 'Atrasado', pending: 'Pendente', future: 'Futuro', paid: 'Pago',
+  };
 
   return (
-    <div
-      className="flex items-center justify-between p-4 rounded-2xl cursor-pointer group transition-all duration-150"
-      style={{ background: C.surfaceLow }}
-      onMouseEnter={e => (e.currentTarget.style.background = C.surfaceMid)}
-      onMouseLeave={e => (e.currentTarget.style.background = C.surfaceLow)}
-    >
-      <div className="flex items-center gap-4">
-        {/* Icon */}
-        <div
-          className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm group-hover:scale-110 transition-transform duration-150"
-          style={{ background: C.surfaceLowest }}
-        >
-          {emoji}
-        </div>
-        <div>
-          <h4 className="font-semibold text-sm" style={{ color: C.onSurface, fontFamily: 'Inter' }}>
-            {transaction.description}
-          </h4>
-          <p className="text-xs mt-0.5" style={{ color: C.onSurfaceVariant, fontFamily: 'Inter' }}>
-            {transaction.category} · {date}
-            {transaction.isPaid && <span className="ml-1.5 text-[10px] font-semibold" style={{ color: C.tertiary }}>● Pago</span>}
+    <div className="flex items-center gap-3 p-3.5 rounded-xl border border-border bg-card hover:bg-accent/30 transition-all duration-150 group">
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base ${isIncome ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-slate-100 dark:bg-slate-800/60'}`}>
+        {emoji}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-semibold text-foreground truncate">{transaction.description}</p>
+          <p className={`text-sm font-bold flex-shrink-0 ${isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+            {isIncome ? '+' : '−'}{fmt(transaction.amount)}
           </p>
         </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="font-bold text-sm" style={{
-          color: isIncome ? C.tertiary : C.error,
-          fontFamily: 'Inter'
-        }}>
-          {isIncome ? '+' : '−'}{fmt(transaction.amount)}
-        </span>
-        {/* Hover actions */}
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={e => { e.stopPropagation(); onTogglePaid(transaction.id); }}
-            className="w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold transition-colors hover:bg-white"
-            style={{ color: C.tertiary }} title="Marcar pago">✓</button>
-          <button onClick={e => { e.stopPropagation(); onEdit(transaction); }}
-            className="w-7 h-7 rounded-xl flex items-center justify-center text-xs transition-colors hover:bg-white"
-            style={{ color: C.neutral }} title="Editar">✎</button>
-          <button onClick={e => { e.stopPropagation(); onDelete(transaction); }}
-            className="w-7 h-7 rounded-xl flex items-center justify-center text-xs transition-colors hover:bg-white"
-            style={{ color: C.error }} title="Excluir">✕</button>
+        <div className="flex items-center justify-between mt-0.5">
+          <p className="text-xs text-muted-foreground">{transaction.category} · {date}</p>
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusStyles[status] || statusStyles.pending}`}>
+              {statusLabels[status] || status}
+            </span>
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={e => { e.stopPropagation(); onTogglePaid(transaction.id); }}
+                className="h-6 w-6 flex items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-xs font-bold">✓</button>
+              <button onClick={e => { e.stopPropagation(); onEdit(transaction); }}
+                className="h-6 w-6 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-accent text-xs">✎</button>
+              <button onClick={e => { e.stopPropagation(); onDelete(transaction); }}
+                className="h-6 w-6 flex items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-xs">✕</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 };
-
-// ─── Stat pill ─────────────────────────────────────────────────────────────────
-const StatPill = ({ label, value, positive }: { label: string; value: string; positive: boolean }) => (
-  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }}>
-    <div className="w-4 h-4 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
-      {positive ? <TrendingUp className="w-2.5 h-2.5 text-white" /> : <Minus className="w-2.5 h-2.5 text-white" />}
-    </div>
-    <span className="text-xs text-white/80 font-medium" style={{ fontFamily: 'Inter' }}>{label}</span>
-    <span className="text-xs text-white font-bold" style={{ fontFamily: 'Inter' }}>{value}</span>
-  </div>
-);
 
 // ─── Main ──────────────────────────────────────────────────────────────────────
 interface DashboardProps { session: Session; }
@@ -189,8 +177,25 @@ export default function Dashboard({ session }: DashboardProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(toMonthKey(new Date()));
+  const [statusFilter, setStatusFilter] = useState('all');
   const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>(undefined);
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return document.documentElement.classList.contains('dark') ||
+        localStorage.getItem('theme') === 'dark' ||
+        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (darkMode) { document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark'); }
+    else { document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light'); }
+  }, [darkMode]);
 
   useEffect(() => {
     const load = async () => {
@@ -202,6 +207,8 @@ export default function Dashboard({ session }: DashboardProps) {
     };
     load();
   }, []);
+
+  useEffect(() => { setSelectedIds(new Set()); }, [selectedMonth, statusFilter]);
 
   const handleAdd = async (newTx: Omit<Transaction, 'id'>[]) => {
     const rows = newTx.map(t => toSupabase(t, session.user.id));
@@ -223,7 +230,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const handleDelete = async () => {
     if (!deletingTransaction) return;
     const { error } = await supabase.from('transactions').delete().eq('id', deletingTransaction.id);
-    if (error) { toast.error('Erro ao excluir'); return; }
+    if (error) { toast.error('Erro'); return; }
     setTransactions(prev => prev.filter(t => t.id !== deletingTransaction.id));
     toast.success('Excluída!');
     setDeletingTransaction(null);
@@ -236,6 +243,25 @@ export default function Dashboard({ session }: DashboardProps) {
     const { error } = await supabase.from('transactions').update({ is_paid: updated.isPaid, paid_date: updated.paidDate ?? null }).eq('id', id);
     if (error) { toast.error('Erro'); return; }
     setTransactions(prev => prev.map(t => t.id === id ? updated : t));
+    toast.success('Status atualizado!');
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+
+  const handleSelectAll = () => {
+    setSelectedIds(selectedIds.size === pendingTx.length ? new Set() : new Set(pendingTx.map(t => t.id)));
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    const { error } = await supabase.from('transactions').delete().in('id', ids);
+    if (error) { toast.error('Erro ao excluir'); return; }
+    setTransactions(prev => prev.filter(t => !selectedIds.has(t.id)));
+    toast.success(`${ids.length} excluída(s)!`);
+    setSelectedIds(new Set());
+    setShowBulkDeleteConfirm(false);
   };
 
   const navigateMonth = (dir: 'prev' | 'next') => {
@@ -245,13 +271,21 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Derived
   const txMonth = transactions.filter(t => t.dueDate.startsWith(selectedMonth));
-  const totalIncome = txMonth.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const totalIncome  = txMonth.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = txMonth.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const netBalance = totalIncome - totalExpense;
+  const netBalance   = totalIncome - totalExpense;
+  const incomeCount  = txMonth.filter(t => t.type === 'income').length;
+  const expenseCount = txMonth.filter(t => t.type === 'expense').length;
   const overdueCount = txMonth.filter(t => getTransactionStatus(t) === 'overdue').length;
-  const recentTx = transactions.slice(0, 5);
 
-  // Spending by category
+  const pendingTx = txMonth
+    .filter(t => {
+      if (t.isPaid) return false;
+      if (statusFilter === 'all') return true;
+      return getTransactionStatus(t) === statusFilter;
+    })
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
   const expByCat = txMonth.filter(t => t.type === 'expense').reduce((acc, t) => {
     acc[t.category] = (acc[t.category] || 0) + t.amount;
     return acc;
@@ -259,7 +293,6 @@ export default function Dashboard({ session }: DashboardProps) {
   const totalExp = Object.values(expByCat).reduce((s, v) => s + v, 0);
   const topCats = Object.entries(expByCat).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
-  // Donut segments
   const DONUT_COLORS = [C.primary, C.tertiary, C.primaryLight];
   let donutOffset = 25;
   const segments = topCats.map(([cat, val], i) => {
@@ -269,264 +302,304 @@ export default function Dashboard({ session }: DashboardProps) {
     return seg;
   });
 
+  const allSelected = pendingTx.length > 0 && selectedIds.size === pendingTx.length;
+  const someSelected = selectedIds.size > 0;
+
   const addTrigger = (
-    <button
-      className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 hover:scale-105 duration-150"
-      style={{ background: '#6FFBBE', color: '#065F46', fontFamily: 'Inter', boxShadow: '0 4px 14px rgba(111,255,190,0.3)' }}
-    >
-      <Plus className="w-4 h-4" /> Nova Transação
-    </button>
+    <Button size="sm" className="h-8 bg-violet-600 hover:bg-violet-700 rounded-lg text-xs gap-1.5 px-2.5 sm:px-3">
+      <Plus className="w-3.5 h-3.5 flex-shrink-0" />
+      <span className="hidden sm:inline">Nova Transação</span>
+    </Button>
   );
 
   return (
-    <div className="min-h-screen pb-32" style={{ background: C.surface, fontFamily: 'Inter' }}>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40" style={{ background: C.surface }}>
-        <div className="flex justify-between items-center px-5 py-4 max-w-2xl mx-auto">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold text-sm"
-              style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})` }}
-            >
-              {session.user.email?.[0]?.toUpperCase() ?? 'W'}
+      <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
+
+          {/* Logo */}
+          <div className="flex items-center gap-2.5 flex-shrink-0">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-sm"
+              style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})` }}>
+              W
             </div>
-            <div>
-              <p className="text-xs font-medium" style={{ color: C.neutral }}>Bem-vindo,</p>
-              <h1 className="font-bold text-base leading-tight" style={{ color: C.onSurface, fontFamily: 'Plus Jakarta Sans' }}>
-                WeekLeaks
-              </h1>
-            </div>
+            <span className="font-bold text-base text-slate-900 dark:text-slate-100 tracking-tight hidden sm:block">
+              WeekLeaks
+            </span>
           </div>
-          <button
-            onClick={async () => await supabase.auth.signOut()}
-            className="w-10 h-10 rounded-2xl flex items-center justify-center transition-colors"
-            style={{ background: C.surfaceLow, color: C.neutral }}
-            title="Sair"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+
+          {/* Actions */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500 dark:text-slate-400 hidden md:block truncate max-w-[160px]">
+              {session.user.email}
+            </span>
+            <NewTransactionDialog onAdd={handleAdd} trigger={addTrigger} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5 gap-1.5">
+                  <Menu className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Menu</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem asChild>
+                  <Link to="/extrato" className="flex items-center gap-2 cursor-pointer">
+                    <FileText className="w-4 h-4 text-slate-500" /> Extrato
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/historico" className="flex items-center gap-2 cursor-pointer">
+                    <History className="w-4 h-4 text-slate-500" /> Histórico
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/cartoes" className="flex items-center gap-2 cursor-pointer">
+                    <CreditCard className="w-4 h-4 text-slate-500" /> Cartões
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setDarkMode(!darkMode)} className="flex items-center gap-2 cursor-pointer">
+                  {darkMode ? <Sun className="w-4 h-4 text-slate-500" /> : <Moon className="w-4 h-4 text-slate-500" />}
+                  {darkMode ? 'Modo claro' : 'Modo escuro'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => supabase.auth.signOut()}
+                  className="flex items-center gap-2 cursor-pointer text-rose-600 dark:text-rose-400 focus:text-rose-600">
+                  <LogOut className="w-4 h-4" /> Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-5 space-y-5">
+      <main className="max-w-6xl mx-auto px-3 sm:px-6 py-5 space-y-5">
 
-        {/* ── Hero: Balance Card ───────────────────────────────────────────── */}
+        {/* ── Hero Card ───────────────────────────────────────────────────── */}
         <div
-          className="rounded-[2rem] p-7 text-white relative overflow-hidden"
+          className="rounded-2xl p-6 sm:p-8 text-white relative overflow-hidden"
           style={{
             background: `linear-gradient(135deg, ${C.primary} 0%, ${C.primaryDark} 100%)`,
             boxShadow: `0 20px 40px ${C.primary}26`,
           }}
         >
-          {/* Decorative blobs */}
+          {/* Blobs */}
           <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full opacity-10"
             style={{ background: 'white', filter: 'blur(32px)' }} />
           <div className="absolute -bottom-8 -left-8 w-40 h-40 rounded-full opacity-10"
             style={{ background: C.tertiary, filter: 'blur(28px)' }} />
 
-          <div className="relative z-10">
-            {/* Month nav */}
-            <div className="flex items-center gap-2 mb-3">
-              <button onClick={() => navigateMonth('prev')} className="opacity-60 hover:opacity-100 transition-opacity active:scale-90">
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="text-xs font-semibold uppercase tracking-widest opacity-70 capitalize" style={{ fontFamily: 'Inter' }}>
-                {formatMonthLabel(selectedMonth)}
-              </span>
-              <button onClick={() => navigateMonth('next')} className="opacity-60 hover:opacity-100 transition-opacity active:scale-90">
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Balance */}
-            <p className="text-xs font-semibold uppercase tracking-widest opacity-60 mb-1" style={{ fontFamily: 'Inter' }}>
-              Saldo Líquido
-            </p>
-            <h2
-              className="font-extrabold tracking-tight mb-5"
-              style={{ fontSize: '2.75rem', fontFamily: 'Plus Jakarta Sans', lineHeight: 1.05 }}
-            >
-              {netBalance < 0 ? '−' : ''}{fmt(netBalance)}
-            </h2>
-
-            {/* Stat pills */}
-            <div className="flex flex-wrap gap-2 mb-6">
-              <StatPill label="Receitas" value={fmt(totalIncome)} positive={true} />
-              <StatPill label="Despesas" value={fmt(totalExpense)} positive={false} />
-              {overdueCount > 0 && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(239,68,68,0.25)' }}>
-                  <AlertTriangle className="w-3 h-3 text-red-300" />
-                  <span className="text-xs text-red-200 font-semibold">{overdueCount} atrasado{overdueCount > 1 ? 's' : ''}</span>
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
+            <div>
+              {/* Month nav */}
+              <div className="flex items-center gap-2 mb-2">
+                <button onClick={() => navigateMonth('prev')} className="opacity-60 hover:opacity-100 transition-opacity">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-xs font-semibold uppercase tracking-widest opacity-70 capitalize">
+                  {formatMonthLabel(selectedMonth)}
+                </span>
+                <button onClick={() => navigateMonth('next')} className="opacity-60 hover:opacity-100 transition-opacity">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs font-semibold uppercase tracking-widest opacity-60 mb-1">Saldo Líquido</p>
+              <h2 className="font-extrabold tracking-tight mb-4 text-4xl sm:text-5xl leading-none">
+                {netBalance < 0 ? '−' : ''}{fmt(netBalance)}
+              </h2>
+              {/* Pills */}
+              <div className="flex flex-wrap gap-2">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }}>
+                  <TrendingUp className="w-3 h-3" />
+                  <span className="text-xs font-medium opacity-80">Receitas</span>
+                  <span className="text-xs font-bold">{fmt(totalIncome)}</span>
                 </div>
-              )}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }}>
+                  <Minus className="w-3 h-3" />
+                  <span className="text-xs font-medium opacity-80">Despesas</span>
+                  <span className="text-xs font-bold">{fmt(totalExpense)}</span>
+                </div>
+                {overdueCount > 0 && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(239,68,68,0.25)' }}>
+                    <AlertTriangle className="w-3 h-3 text-red-300" />
+                    <span className="text-xs font-semibold text-red-200">{overdueCount} atrasado{overdueCount > 1 ? 's' : ''}</span>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* CTA */}
+            {/* Quick links on desktop */}
             <div className="flex gap-3 flex-wrap">
-              <NewTransactionDialog onAdd={handleAdd} trigger={addTrigger} />
-              <Link
-                to="/extrato"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
-                style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', color: '#fff', fontFamily: 'Inter' }}
-              >
+              <Link to="/extrato"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95"
+                style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', color: '#fff' }}>
                 Ver Extrato <ChevronRightIcon className="w-4 h-4" />
               </Link>
             </div>
           </div>
         </div>
 
+        {/* ── Summary Cards ────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/30 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+            <div className="flex items-start justify-between mb-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Receitas</p>
+              <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/50">
+                <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold tracking-tight text-emerald-800 dark:text-emerald-300">{fmt(totalIncome)}</p>
+            <p className="text-xs mt-1.5 text-emerald-600/70 dark:text-emerald-500/70">{incomeCount} receita{incomeCount !== 1 ? 's' : ''} no mês</p>
+          </div>
+
+          <div className="rounded-2xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/30 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+            <div className="flex items-start justify-between mb-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-400">Despesas</p>
+              <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-900/50">
+                <TrendingDown className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold tracking-tight text-rose-800 dark:text-rose-300">{fmt(totalExpense)}</p>
+            <p className="text-xs mt-1.5 text-rose-600/70 dark:text-rose-500/70">{expenseCount} despesa{expenseCount !== 1 ? 's' : ''} no mês</p>
+          </div>
+
+          <div className="rounded-2xl border border-violet-200 dark:border-violet-800/50 bg-violet-50 dark:bg-violet-950/30 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+            <div className="flex items-start justify-between mb-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-violet-700 dark:text-violet-400">Saldo Líquido</p>
+              <div className="p-2 rounded-xl bg-violet-100 dark:bg-violet-900/50">
+                <Wallet className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold tracking-tight text-violet-800 dark:text-violet-300">
+              {netBalance < 0 ? '−' : ''}{fmt(netBalance)}
+            </p>
+            <p className="text-xs mt-1.5 text-violet-600/70 dark:text-violet-500/70">Receitas − despesas do mês</p>
+          </div>
+        </div>
+
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 rounded-full border-2 animate-spin"
-              style={{ borderColor: C.primary, borderTopColor: 'transparent' }} />
+          <div className="flex items-center justify-center py-24">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 rounded-full border-2 border-violet-600 border-t-transparent animate-spin" />
+              <p className="text-sm text-slate-500">Carregando...</p>
+            </div>
           </div>
         ) : (
-          <>
-            {/* ── Two-col: Spending + Piggy Bank ──────────────────────────── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
-              {/* Spending donut */}
-              <div
-                className="rounded-[1.75rem] p-5"
-                style={{ background: C.surfaceLowest, boxShadow: '0 8px 24px rgba(15,23,42,0.05)' }}
-              >
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-bold text-base" style={{ color: C.onSurface, fontFamily: 'Plus Jakarta Sans' }}>
-                    Gastos
-                  </h3>
-                  <Link to="/extrato" className="text-xs font-semibold" style={{ color: C.primary }}>Ver tudo</Link>
-                </div>
+            {/* ── Pending Transactions ─────────────────────────────────────── */}
+            <div className="lg:col-span-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Pendentes</h2>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[130px] h-7 text-xs rounded-lg border-slate-200 dark:border-slate-700">
+                    <SelectValue placeholder="Filtrar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="overdue">🔴 Atrasados</SelectItem>
+                    <SelectItem value="pending">🟡 Pendentes</SelectItem>
+                    <SelectItem value="future">🔵 Futuros</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                {totalExp === 0 ? (
-                  <p className="text-sm text-center py-6" style={{ color: C.onSurfaceVariant }}>Sem despesas</p>
-                ) : (
-                  <div className="flex items-center gap-5">
-                    {/* Donut */}
-                    <div className="relative w-28 h-28 flex-shrink-0">
-                      <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-                        <circle cx="18" cy="18" r="15.915" fill="transparent" stroke={C.surfaceLow} strokeWidth="3.5" />
-                        {segments.map((seg, i) => (
-                          <circle key={i} cx="18" cy="18" r="15.915" fill="transparent"
-                            stroke={seg.color} strokeWidth="3.5"
-                            strokeDasharray={`${seg.pct} ${100 - seg.pct}`}
-                            strokeDashoffset={-seg.offset + 25}
-                            style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-                          />
-                        ))}
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-[9px] font-bold uppercase tracking-wide" style={{ color: C.neutral }}>Total</span>
-                        <span className="text-sm font-extrabold" style={{ color: C.onSurface, fontFamily: 'Plus Jakarta Sans' }}>
-                          {fmtCompact(totalExp)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Legend */}
-                    <div className="space-y-2.5 flex-1 min-w-0">
-                      {segments.map((seg, i) => (
-                        <div key={i} className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: seg.color }} />
-                            <span className="text-xs font-medium truncate" style={{ color: C.onSurfaceVariant }}>{seg.cat}</span>
-                          </div>
-                          <span className="text-xs font-bold flex-shrink-0" style={{ color: C.onSurface }}>
-                            {totalExp > 0 ? Math.round((seg.val / totalExp) * 100) : 0}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+              {pendingTx.length > 0 && (
+                <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" checked={allSelected} onChange={handleSelectAll}
+                      className="w-4 h-4 cursor-pointer accent-violet-600" />
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      {someSelected ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}
+                    </span>
                   </div>
-                )}
-              </div>
-
-              {/* Piggy bank */}
-              <PiggyBankWidget session={session} />
-            </div>
-
-            {/* ── Recent Activity ─────────────────────────────────────────── */}
-            <div
-              className="rounded-[1.75rem] p-6"
-              style={{ background: C.surfaceLowest, boxShadow: '0 8px 24px rgba(15,23,42,0.05)' }}
-            >
-              <div className="flex justify-between items-center mb-5">
-                <h3 className="font-bold text-lg" style={{ color: C.onSurface, fontFamily: 'Plus Jakarta Sans' }}>
-                  Atividade Recente
-                </h3>
-                <Link to="/extrato" className="text-xs font-semibold" style={{ color: C.primary }}>Ver tudo</Link>
-              </div>
-
-              {recentTx.length === 0 ? (
-                <div className="text-center py-10">
-                  <p className="text-sm font-medium" style={{ color: C.onSurfaceVariant }}>Nenhuma transação ainda</p>
-                  <p className="text-xs mt-1" style={{ color: C.neutral }}>Adicione sua primeira transação acima</p>
+                  {someSelected && (
+                    <Button size="sm" variant="destructive" onClick={() => setShowBulkDeleteConfirm(true)}
+                      className="h-6 text-xs gap-1 px-2.5">
+                      <Trash2 className="w-3 h-3" /> Excluir {selectedIds.size}
+                    </Button>
+                  )}
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  {recentTx.map(tx => (
+              )}
+
+              <div className="space-y-2">
+                {pendingTx.length > 0 ? (
+                  pendingTx.map(tx => (
                     <TxRow key={tx.id} transaction={tx}
                       onTogglePaid={handleToggle}
                       onEdit={setEditingTransaction}
                       onDelete={setDeletingTransaction}
                     />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* ── Insight Banner ───────────────────────────────────────────── */}
-            <div
-              className="rounded-[1.75rem] p-6 mb-4"
-              style={{ background: C.surfaceHigh, boxShadow: '0 4px 16px rgba(15,23,42,0.04)' }}
-            >
-              <span
-                className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-3"
-                style={{ background: `${C.primary}18`, color: C.primary }}
-              >
-                Dica Financeira
-              </span>
-              <h3 className="font-extrabold text-xl mb-2" style={{ color: C.onSurface, fontFamily: 'Plus Jakarta Sans' }}>
-                Maximize sua poupança esta semana
-              </h3>
-              <p className="text-sm leading-relaxed mb-5" style={{ color: C.onSurfaceVariant }}>
-                Revise suas transações recorrentes e identifique gastos que podem ser reduzidos ou eliminados este mês.
-              </p>
-              <div className="flex gap-3 flex-wrap">
-                <Link to="/historico"
-                  className="px-5 py-2.5 rounded-xl font-bold text-sm text-white inline-flex items-center gap-2 transition-all active:scale-95 hover:shadow-lg"
-                  style={{ background: C.primary, boxShadow: `0 4px 16px ${C.primary}30` }}
-                >
-                  Ver Histórico <ChevronRightIcon className="w-4 h-4" />
-                </Link>
-                <Link to="/cartoes"
-                  className="px-5 py-2.5 rounded-xl font-bold text-sm inline-flex items-center gap-2 transition-all active:scale-95"
-                  style={{ background: C.surfaceLowest, color: C.primary }}
-                >
-                  Cartões <CreditCard className="w-4 h-4" />
-                </Link>
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                      <Plus className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Nenhuma transação pendente</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 capitalize">{formatMonthLabel(selectedMonth)}</p>
+                  </div>
+                )}
               </div>
             </div>
-          </>
+
+            {/* ── Right column: Donut + Piggy Bank ─────────────────────────── */}
+            <div className="lg:col-span-2 space-y-4">
+
+              {/* Spending donut */}
+              <div>
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Resumo</h2>
+                <div className="rounded-2xl border border-border bg-card p-5">
+                  <div className="flex justify-between items-center mb-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Despesas por categoria</p>
+                    <Link to="/extrato" className="text-xs font-semibold" style={{ color: C.primary }}>Ver tudo</Link>
+                  </div>
+                  {totalExp === 0 ? (
+                    <p className="text-sm text-center py-6 text-muted-foreground">Sem despesas este mês</p>
+                  ) : (
+                    <div className="flex items-center gap-5">
+                      <div className="relative w-28 h-28 flex-shrink-0">
+                        <svg viewBox="0 0 36 36" className="w-full h-full">
+                          <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#EFF4FF" strokeWidth="3.5" />
+                          {segments.map((seg, i) => (
+                            <circle key={i} cx="18" cy="18" r="15.915" fill="transparent"
+                              stroke={seg.color} strokeWidth="3.5"
+                              strokeDasharray={`${seg.pct} ${100 - seg.pct}`}
+                              strokeDashoffset={seg.offset}
+                              style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 0.5s' }}
+                            />
+                          ))}
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="text-[9px] font-bold uppercase text-muted-foreground">Total</span>
+                          <span className="text-sm font-bold text-foreground">{fmtCompact(totalExp)}</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2.5 flex-1 min-w-0">
+                        {segments.map((seg, i) => (
+                          <div key={i} className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: seg.color }} />
+                              <span className="text-xs text-muted-foreground truncate">{seg.cat}</span>
+                            </div>
+                            <span className="text-xs font-bold text-foreground flex-shrink-0">
+                              {totalExp > 0 ? Math.round((seg.val / totalExp) * 100) : 0}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Piggy bank */}
+              <PiggyBankWidget session={session} />
+            </div>
+          </div>
         )}
       </main>
-
-      {/* ── Bottom Nav ──────────────────────────────────────────────────────── */}
-      <nav
-        className="fixed bottom-0 left-0 w-full z-50 px-4 pb-safe pb-6 pt-3 flex justify-around items-center rounded-t-3xl"
-        style={{
-          background: 'rgba(255,255,255,0.88)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          borderTop: `1px solid ${C.onSurface}0D`,
-          boxShadow: '0 -8px 32px rgba(15,23,42,0.06)',
-        }}
-      >
-        <NavItem to="/" active icon={<LayoutGrid className="w-5 h-5" />} label="Home" />
-        <NavItem to="/extrato" icon={<Receipt className="w-5 h-5" />} label="Extrato" />
-        <NavItem to="/cartoes" icon={<CreditCard className="w-5 h-5" />} label="Cartões" />
-        <NavItem to="/historico" icon={<TrendingUp className="w-5 h-5" />} label="Histórico" />
-      </nav>
 
       {/* ── Dialogs ─────────────────────────────────────────────────────────── */}
       {editingTransaction && (
@@ -537,6 +610,13 @@ export default function Dashboard({ session }: DashboardProps) {
         onOpenChange={open => !open && setDeletingTransaction(null)}
         transaction={deletingTransaction}
         onConfirm={handleDelete}
+      />
+      <DeleteConfirmationDialog
+        open={showBulkDeleteConfirm}
+        onOpenChange={open => !open && setShowBulkDeleteConfirm(false)}
+        transaction={null}
+        customMessage={`Tem certeza que deseja excluir ${selectedIds.size} transação(ões)?`}
+        onConfirm={handleBulkDelete}
       />
     </div>
   );
