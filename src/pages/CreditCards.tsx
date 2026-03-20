@@ -7,10 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft, LayoutDashboard, LogOut, Moon, Sun,
-  Plus, CreditCard, Trash2, Pencil, Receipt, X, Check
+  Plus, CreditCard, Trash2, Pencil, Receipt, Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -36,7 +35,20 @@ interface CardPurchase {
   installment_number: number;
 }
 
-const CATEGORIES = ['Contas', 'Gastos Pessoais', 'Compras', 'Pagamento de Dívidas', 'Alimentação', 'Transporte', 'Saúde', 'Lazer', 'Outros'];
+// ✅ Category picker data
+const PURCHASE_CATEGORIES = [
+  { value: 'Alimentação',  emoji: '🍔', label: 'Alimentação' },
+  { value: 'Compras',      emoji: '🛍️', label: 'Compras' },
+  { value: 'Contas',       emoji: '🏠', label: 'Contas' },
+  { value: 'Saúde',        emoji: '❤️', label: 'Saúde' },
+  { value: 'Transporte',   emoji: '🚗', label: 'Transporte' },
+  { value: 'Lazer',        emoji: '🎮', label: 'Lazer' },
+  { value: 'Viagem',       emoji: '✈️', label: 'Viagem' },
+  { value: 'Educação',     emoji: '🎓', label: 'Educação' },
+  { value: 'Pet',          emoji: '🐾', label: 'Pet' },
+  { value: 'Dívidas',      emoji: '💳', label: 'Dívidas' },
+  { value: 'Outros',       emoji: '📦', label: 'Outros' },
+];
 
 const CARD_COLORS = [
   { value: '#7C3AED', label: 'Violeta' },
@@ -53,18 +65,13 @@ const formatCurrency = (v: number) =>
 const formatDate = (d: string) =>
   new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 
-// Get the current billing period for a card
-// If today >= closing_day → current period started this month on closing_day
-// If today < closing_day  → current period started last month on closing_day
 const getBillingPeriod = (closingDay: number) => {
   const today = new Date();
   const d = today.getDate();
   const m = today.getMonth();
   const y = today.getFullYear();
-
   let start: Date;
   let end: Date;
-
   if (d >= closingDay) {
     start = new Date(y, m, closingDay);
     end = new Date(y, m + 1, closingDay - 1);
@@ -72,19 +79,16 @@ const getBillingPeriod = (closingDay: number) => {
     start = new Date(y, m - 1, closingDay);
     end = new Date(y, m, closingDay - 1);
   }
-
   return { start, end };
 };
 
 const toYMD = (d: Date) => d.toISOString().split('T')[0];
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+// ─── Card Visual ─────────────────────────────────────────────────────────────
 
 const CardVisual = ({ card, total }: { card: CreditCardType; total: number }) => (
-  <div
-    className="relative rounded-2xl p-5 text-white overflow-hidden"
-    style={{ background: `linear-gradient(135deg, ${card.color}ee, ${card.color}99)` }}
-  >
+  <div className="relative rounded-2xl p-5 text-white overflow-hidden"
+    style={{ background: `linear-gradient(135deg, ${card.color}ee, ${card.color}99)` }}>
     <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10"
       style={{ background: 'white', transform: 'translate(30%, -30%)' }} />
     <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full opacity-10"
@@ -123,7 +127,6 @@ const CreditCards = ({ session }: CreditCardsProps) => {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Dialogs
   const [showCardDialog, setShowCardDialog] = useState(false);
   const [showPurchaseDialog, setShowPurchaseDialog] = useState(false);
   const [showBillDialog, setShowBillDialog] = useState(false);
@@ -139,14 +142,13 @@ const CreditCards = ({ session }: CreditCardsProps) => {
   // Purchase form
   const [purchaseDesc, setPurchaseDesc] = useState('');
   const [purchaseAmount, setPurchaseAmount] = useState('');
-  const [purchaseCategory, setPurchaseCategory] = useState('Compras');
+  const [purchaseCategory, setPurchaseCategory] = useState('Alimentação');
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
   const [purchaseInstallments, setPurchaseInstallments] = useState('1');
 
-  // Bill launch form
+  // Bill
   const [billDueDate, setBillDueDate] = useState('');
 
-  // Dark mode
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return document.documentElement.classList.contains('dark') ||
@@ -161,8 +163,6 @@ const CreditCards = ({ session }: CreditCardsProps) => {
     else { document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light'); }
   }, [darkMode]);
 
-  // ── Fetch data ──────────────────────────────────────────────────────────────
-
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
@@ -172,7 +172,7 @@ const CreditCards = ({ session }: CreditCardsProps) => {
       ]);
       if (cardsData) {
         setCards(cardsData as CreditCardType[]);
-        if (cardsData.length > 0 && !selectedCardId) setSelectedCardId(cardsData[0].id);
+        if (cardsData.length > 0 && !selectedCardId) setSelectedCardId((cardsData as CreditCardType[])[0].id);
       }
       if (purchasesData) setPurchases(purchasesData as CardPurchase[]);
       setLoading(false);
@@ -180,29 +180,19 @@ const CreditCards = ({ session }: CreditCardsProps) => {
     fetchAll();
   }, []);
 
-  // ── Derived data ────────────────────────────────────────────────────────────
-
   const selectedCard = cards.find(c => c.id === selectedCardId) ?? null;
-
   const cardPurchases = purchases.filter(p => p.card_id === selectedCardId);
-
   const { start: periodStart, end: periodEnd } = selectedCard
     ? getBillingPeriod(selectedCard.closing_day)
     : { start: new Date(), end: new Date() };
-
-  const currentPeriodPurchases = cardPurchases.filter(p => {
-    const d = p.purchase_date;
-    return d >= toYMD(periodStart) && d <= toYMD(periodEnd);
-  });
-
+  const currentPeriodPurchases = cardPurchases.filter(p =>
+    p.purchase_date >= toYMD(periodStart) && p.purchase_date <= toYMD(periodEnd)
+  );
   const currentTotal = currentPeriodPurchases.reduce((s, p) => s + p.amount, 0);
-
   const totalByCategory = currentPeriodPurchases.reduce((acc, p) => {
     acc[p.category] = (acc[p.category] || 0) + p.amount;
     return acc;
   }, {} as Record<string, number>);
-
-  // Card totals for tabs
   const cardTotals = cards.reduce((acc, card) => {
     const { start, end } = getBillingPeriod(card.closing_day);
     acc[card.id] = purchases
@@ -211,7 +201,7 @@ const CreditCards = ({ session }: CreditCardsProps) => {
     return acc;
   }, {} as Record<string, number>);
 
-  // ── Card CRUD ───────────────────────────────────────────────────────────────
+  // ── Card CRUD ─────────────────────────────────────────────────────────────
 
   const openNewCard = () => {
     setEditingCard(null);
@@ -228,13 +218,7 @@ const CreditCards = ({ session }: CreditCardsProps) => {
 
   const handleSaveCard = async () => {
     if (!cardName.trim()) { toast.error('Nome do cartão é obrigatório'); return; }
-    const payload = {
-      user_id: session.user.id,
-      name: cardName.trim(),
-      closing_day: parseInt(cardClosingDay),
-      due_day: parseInt(cardDueDay),
-      color: cardColor,
-    };
+    const payload = { user_id: session.user.id, name: cardName.trim(), closing_day: parseInt(cardClosingDay), due_day: parseInt(cardDueDay), color: cardColor };
     if (editingCard) {
       const { error } = await supabase.from('credit_cards').update(payload).eq('id', editingCard.id);
       if (error) { toast.error('Erro ao atualizar cartão'); return; }
@@ -260,11 +244,11 @@ const CreditCards = ({ session }: CreditCardsProps) => {
     toast.success('Cartão excluído!');
   };
 
-  // ── Purchase CRUD ───────────────────────────────────────────────────────────
+  // ── Purchase CRUD ─────────────────────────────────────────────────────────
 
   const openNewPurchase = () => {
     setEditingPurchase(null);
-    setPurchaseDesc(''); setPurchaseAmount(''); setPurchaseCategory('Compras');
+    setPurchaseDesc(''); setPurchaseAmount(''); setPurchaseCategory('Alimentação');
     setPurchaseDate(new Date().toISOString().split('T')[0]); setPurchaseInstallments('1');
     setShowPurchaseDialog(true);
   };
@@ -282,21 +266,15 @@ const CreditCards = ({ session }: CreditCardsProps) => {
     const amt = parseFloat(purchaseAmount);
     if (!amt || amt <= 0) { toast.error('Valor deve ser maior que zero'); return; }
     if (!selectedCardId) return;
-
     const installments = Math.max(1, parseInt(purchaseInstallments) || 1);
 
     if (editingPurchase) {
-      const payload = {
-        description: purchaseDesc.trim(), amount: amt,
-        category: purchaseCategory, purchase_date: purchaseDate,
-        installments, installment_number: editingPurchase.installment_number,
-      };
+      const payload = { description: purchaseDesc.trim(), amount: amt, category: purchaseCategory, purchase_date: purchaseDate, installments, installment_number: editingPurchase.installment_number };
       const { error } = await supabase.from('card_purchases').update(payload).eq('id', editingPurchase.id);
       if (error) { toast.error('Erro ao atualizar compra'); return; }
       setPurchases(prev => prev.map(p => p.id === editingPurchase.id ? { ...p, ...payload } : p));
       toast.success('Compra atualizada!');
     } else {
-      // If installments > 1, create one row per installment
       const perInstallment = amt / installments;
       const rows = Array.from({ length: installments }, (_, i) => {
         const date = new Date(purchaseDate + 'T12:00:00');
@@ -305,8 +283,7 @@ const CreditCards = ({ session }: CreditCardsProps) => {
           user_id: session.user.id, card_id: selectedCardId,
           description: installments > 1 ? `${purchaseDesc.trim()} (${i + 1}/${installments})` : purchaseDesc.trim(),
           amount: Math.round(perInstallment * 100) / 100,
-          category: purchaseCategory,
-          purchase_date: toYMD(date),
+          category: purchaseCategory, purchase_date: toYMD(date),
           installments, installment_number: i + 1,
         };
       });
@@ -325,15 +302,12 @@ const CreditCards = ({ session }: CreditCardsProps) => {
     toast.success('Compra excluída!');
   };
 
-  // ── Launch bill ─────────────────────────────────────────────────────────────
+  // ── Bill ──────────────────────────────────────────────────────────────────
 
   const openBillDialog = () => {
     if (!selectedCard) return;
-    // Default due date: next occurrence of due_day
     const today = new Date();
-    const y = today.getFullYear();
-    const m = today.getMonth();
-    const due = new Date(y, m, selectedCard.due_day);
+    const due = new Date(today.getFullYear(), today.getMonth(), selectedCard.due_day);
     if (due <= today) due.setMonth(due.getMonth() + 1);
     setBillDueDate(toYMD(due));
     setShowBillDialog(true);
@@ -342,41 +316,31 @@ const CreditCards = ({ session }: CreditCardsProps) => {
   const handleLaunchBill = async () => {
     if (!selectedCard || currentTotal === 0) return;
     const today = new Date().toISOString().split('T')[0];
-    const payload = {
+    const { error } = await supabase.from('transactions').insert({
       user_id: session.user.id,
       description: `Fatura ${selectedCard.name}`,
-      amount: currentTotal,
-      date: billDueDate,
-      created_date: today,
-      due_date: billDueDate,
-      paid_date: null,
-      category: 'Pagamento de Dívidas',
-      type: 'expense',
-      is_paid: false,
-      recurring_group: null,
-    };
-    const { error } = await supabase.from('transactions').insert(payload);
+      amount: currentTotal, date: billDueDate, created_date: today,
+      due_date: billDueDate, paid_date: null,
+      category: 'Pagamento de Dívidas', type: 'expense',
+      is_paid: false, recurring_group: null,
+    });
     if (error) { toast.error('Erro ao lançar fatura'); return; }
     toast.success(`Fatura de ${formatCurrency(currentTotal)} lançada no Dashboard!`);
     setShowBillDialog(false);
   };
 
   const handleLogout = async () => { await supabase.auth.signOut(); };
-
   const days = Array.from({ length: 28 }, (_, i) => String(i + 1));
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
 
-      {/* Header */}
       <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Link to="/">
-              <Button variant="ghost" size="icon" className="h-8 w-8"><ArrowLeft className="w-4 h-4" /></Button>
-            </Link>
+            <Link to="/"><Button variant="ghost" size="icon" className="h-8 w-8"><ArrowLeft className="w-4 h-4" /></Button></Link>
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center">
                 <LayoutDashboard className="w-4 h-4 text-white" />
@@ -397,16 +361,13 @@ const CreditCards = ({ session }: CreditCardsProps) => {
       </header>
 
       <main className="max-w-6xl mx-auto px-3 sm:px-6 py-6 space-y-6">
-
-        {/* Page title */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Cartões de Crédito</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Gerencie suas faturas e compras</p>
           </div>
           <Button onClick={openNewCard} size="sm" className="h-8 bg-violet-600 hover:bg-violet-700 gap-1.5 text-xs rounded-lg">
-            <Plus className="w-3.5 h-3.5" />
-            Novo Cartão
+            <Plus className="w-3.5 h-3.5" /> Novo Cartão
           </Button>
         </div>
 
@@ -428,111 +389,80 @@ const CreditCards = ({ session }: CreditCardsProps) => {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-            {/* Left: Card list + visual */}
+            {/* Left panel */}
             <div className="space-y-4">
-              {/* Card tabs */}
               <div className="flex flex-col gap-2">
                 {cards.map(card => (
-                  <button
-                    key={card.id}
-                    onClick={() => setSelectedCardId(card.id)}
+                  <button key={card.id} onClick={() => setSelectedCardId(card.id)}
                     className={cn(
                       'flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all',
                       selectedCardId === card.id
                         ? 'border-violet-400 dark:border-violet-600 bg-violet-50 dark:bg-violet-950/30'
                         : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
-                    )}
-                  >
+                    )}>
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: card.color }} />
                       <div>
                         <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{card.name}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          Fecha dia {card.closing_day} · Vence dia {card.due_day}
-                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Fecha dia {card.closing_day} · Vence dia {card.due_day}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                        {formatCurrency(cardTotals[card.id] ?? 0)}
-                      </span>
-                      <button onClick={(e) => { e.stopPropagation(); openEditCard(card); }}
-                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={(e) => { e.stopPropagation(); handleDeleteCard(card.id); }}
-                        className="text-slate-400 hover:text-rose-600 p-1">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{formatCurrency(cardTotals[card.id] ?? 0)}</span>
+                      <button onClick={(e) => { e.stopPropagation(); openEditCard(card); }} className="text-slate-400 hover:text-slate-600 p-1"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteCard(card.id); }} className="text-slate-400 hover:text-rose-600 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </button>
                 ))}
               </div>
 
-              {/* Card visual */}
-              {selectedCard && (
-                <CardVisual card={selectedCard} total={currentTotal} />
-              )}
+              {selectedCard && <CardVisual card={selectedCard} total={currentTotal} />}
 
-              {/* Period info */}
               {selectedCard && (
                 <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Fatura atual</p>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
-                    {periodStart.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-                    {' → '}
-                    {periodEnd.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                    {periodStart.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} → {periodEnd.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
                   </p>
                   <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatCurrency(currentTotal)}</p>
                   <p className="text-xs text-slate-500">{currentPeriodPurchases.length} compra{currentPeriodPurchases.length !== 1 ? 's' : ''} no período</p>
-
-                  <Button
-                    onClick={openBillDialog}
-                    disabled={currentTotal === 0}
-                    className="w-full mt-2 bg-violet-600 hover:bg-violet-700 gap-2 text-sm h-9 rounded-lg"
-                  >
-                    <Receipt className="w-4 h-4" />
-                    Lançar fatura no Dashboard
+                  <Button onClick={openBillDialog} disabled={currentTotal === 0} className="w-full mt-2 bg-violet-600 hover:bg-violet-700 gap-2 text-sm h-9 rounded-lg">
+                    <Receipt className="w-4 h-4" /> Lançar fatura no Dashboard
                   </Button>
                 </div>
               )}
 
-              {/* Spending by category */}
               {Object.keys(totalByCategory).length > 0 && (
                 <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Por categoria</p>
                   <div className="space-y-2">
-                    {Object.entries(totalByCategory)
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([cat, total]) => (
-                        <div key={cat} className="flex items-center justify-between">
-                          <span className="text-xs text-slate-600 dark:text-slate-300">{cat}</span>
+                    {Object.entries(totalByCategory).sort((a, b) => b[1] - a[1]).map(([cat, total]) => {
+                      const catData = PURCHASE_CATEGORIES.find(c => c.value === cat);
+                      return (
+                        <div key={cat} className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm">{catData?.emoji ?? '📦'}</span>
+                            <span className="text-xs text-slate-600 dark:text-slate-300">{cat}</span>
+                          </div>
                           <div className="flex items-center gap-2">
                             <div className="w-16 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-violet-500"
-                                style={{ width: `${(total / currentTotal) * 100}%` }}
-                              />
+                              <div className="h-full rounded-full bg-violet-500" style={{ width: `${(total / currentTotal) * 100}%` }} />
                             </div>
-                            <span className="text-xs font-medium text-slate-700 dark:text-slate-300 w-20 text-right">
-                              {formatCurrency(total)}
-                            </span>
+                            <span className="text-xs font-medium text-slate-700 dark:text-slate-300 w-20 text-right">{formatCurrency(total)}</span>
                           </div>
                         </div>
-                      ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Right: Purchases list */}
+            {/* Right: purchases */}
             <div className="lg:col-span-2 space-y-3">
               <div className="flex items-center justify-between">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Compras — fatura atual
-                </h2>
-                <Button onClick={openNewPurchase} size="sm"
-                  className="h-7 text-xs gap-1 px-3 bg-violet-600 hover:bg-violet-700 rounded-lg">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Compras — fatura atual</h2>
+                <Button onClick={openNewPurchase} size="sm" className="h-7 text-xs gap-1 px-3 bg-violet-600 hover:bg-violet-700 rounded-lg">
                   <Plus className="w-3 h-3" /> Adicionar
                 </Button>
               </div>
@@ -543,74 +473,61 @@ const CreditCards = ({ session }: CreditCardsProps) => {
                     <Plus className="w-4 h-4 text-slate-400" />
                   </div>
                   <p className="text-sm text-slate-500 dark:text-slate-400">Nenhuma compra nesta fatura</p>
-                  <button onClick={openNewPurchase} className="text-xs text-violet-600 dark:text-violet-400 mt-1 hover:underline">
-                    Adicionar primeira compra
-                  </button>
+                  <button onClick={openNewPurchase} className="text-xs text-violet-600 dark:text-violet-400 mt-1 hover:underline">Adicionar primeira compra</button>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {currentPeriodPurchases.map(p => (
-                    <div key={p.id}
-                      className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 transition-all group">
-                      <div className="w-8 h-8 rounded-xl bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center flex-shrink-0 text-sm">
-                        💳
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{p.description}</p>
-                          {p.installments > 1 && (
-                            <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded-md flex-shrink-0">
-                              {p.installment_number}/{p.installments}x
-                            </span>
-                          )}
+                  {currentPeriodPurchases.map(p => {
+                    const catData = PURCHASE_CATEGORIES.find(c => c.value === p.category);
+                    return (
+                      <div key={p.id} className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 transition-all group">
+                        <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0 text-lg">
+                          {catData?.emoji ?? '📦'}
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                          {p.category} · {formatDate(p.purchase_date)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <p className="text-sm font-bold text-rose-600 dark:text-rose-400">
-                          −{formatCurrency(p.amount)}
-                        </p>
-                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => openEditPurchase(p)}
-                            className="h-6 w-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
-                            <Pencil className="w-3 h-3" />
-                          </button>
-                          <button onClick={() => handleDeletePurchase(p.id)}
-                            className="h-6 w-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50">
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{p.description}</p>
+                            {p.installments > 1 && (
+                              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded-md flex-shrink-0">
+                                {p.installment_number}/{p.installments}x
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{p.category} · {formatDate(p.purchase_date)}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <p className="text-sm font-bold text-rose-600 dark:text-rose-400">−{formatCurrency(p.amount)}</p>
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => openEditPurchase(p)} className="h-6 w-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"><Pencil className="w-3 h-3" /></button>
+                            <button onClick={() => handleDeletePurchase(p.id)} className="h-6 w-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50"><Trash2 className="w-3 h-3" /></button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
-              {/* Past purchases (outside current period) */}
               {cardPurchases.filter(p => p.purchase_date < toYMD(periodStart)).length > 0 && (
                 <details className="mt-4">
                   <summary className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 cursor-pointer hover:text-slate-600 dark:hover:text-slate-400 select-none">
                     Faturas anteriores ({cardPurchases.filter(p => p.purchase_date < toYMD(periodStart)).length} compras)
                   </summary>
                   <div className="space-y-2 mt-3">
-                    {cardPurchases
-                      .filter(p => p.purchase_date < toYMD(periodStart))
-                      .map(p => (
-                        <div key={p.id}
-                          className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800/60 bg-white/50 dark:bg-slate-900/50 opacity-60 group hover:opacity-100 transition-opacity">
+                    {cardPurchases.filter(p => p.purchase_date < toYMD(periodStart)).map(p => {
+                      const catData = PURCHASE_CATEGORIES.find(c => c.value === p.category);
+                      return (
+                        <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800/60 bg-white/50 dark:bg-slate-900/50 opacity-60 group hover:opacity-100 transition-opacity">
+                          <span className="text-base">{catData?.emoji ?? '📦'}</span>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-slate-700 dark:text-slate-300 truncate">{p.description}</p>
                             <p className="text-xs text-slate-400">{p.category} · {formatDate(p.purchase_date)}</p>
                           </div>
                           <p className="text-sm font-medium text-rose-500 flex-shrink-0">−{formatCurrency(p.amount)}</p>
-                          <button onClick={() => handleDeletePurchase(p.id)}
-                            className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600">
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                          <button onClick={() => handleDeletePurchase(p.id)} className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600"><Trash2 className="w-3 h-3" /></button>
                         </div>
-                      ))}
+                      );
+                    })}
                   </div>
                 </details>
               )}
@@ -619,13 +536,11 @@ const CreditCards = ({ session }: CreditCardsProps) => {
         )}
       </main>
 
-      {/* ── Card Dialog ─────────────────────────────────────────────────────── */}
+      {/* Card Dialog */}
       <Dialog open={showCardDialog} onOpenChange={setShowCardDialog}>
         {showCardDialog && <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setShowCardDialog(false)} />}
         <DialogContent className="sm:max-w-[380px] z-50">
-          <DialogHeader>
-            <DialogTitle>{editingCard ? 'Editar Cartão' : 'Novo Cartão'}</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>{editingCard ? 'Editar Cartão' : 'Novo Cartão'}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="space-y-1.5">
               <Label>Nome do cartão</Label>
@@ -668,36 +583,58 @@ const CreditCards = ({ session }: CreditCardsProps) => {
         </DialogContent>
       </Dialog>
 
-      {/* ── Purchase Dialog ──────────────────────────────────────────────────── */}
+      {/* Purchase Dialog */}
       <Dialog open={showPurchaseDialog} onOpenChange={setShowPurchaseDialog}>
         {showPurchaseDialog && <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setShowPurchaseDialog(false)} />}
-        <DialogContent className="sm:max-w-[380px] z-50">
-          <DialogHeader>
-            <DialogTitle>{editingPurchase ? 'Editar Compra' : 'Nova Compra'}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-[420px] z-50 max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{editingPurchase ? 'Editar Compra' : 'Nova Compra'}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
+
             <div className="space-y-1.5">
               <Label>Descrição</Label>
-              <Input value={purchaseDesc} onChange={e => setPurchaseDesc(e.target.value)} placeholder="Ex: Supermercado" />
+              <Input value={purchaseDesc} onChange={e => setPurchaseDesc(e.target.value)} placeholder="Ex: Supermercado Extra" />
             </div>
+
             <div className="space-y-1.5">
               <Label>Valor total (R$)</Label>
-              <Input type="number" step="0.01" min="0.01" value={purchaseAmount}
-                onChange={e => setPurchaseAmount(e.target.value)} placeholder="0.00" />
+              <Input type="number" step="0.01" min="0.01" value={purchaseAmount} onChange={e => setPurchaseAmount(e.target.value)} placeholder="0.00" />
             </div>
-            <div className="space-y-1.5">
+
+            {/* ✅ Category icon picker */}
+            <div className="space-y-2">
               <Label>Categoria</Label>
-              <Select value={purchaseCategory} onValueChange={setPurchaseCategory}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent className="z-[200]">
-                  {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <div className="grid grid-cols-4 gap-2">
+                {PURCHASE_CATEGORIES.map(cat => (
+                  <button
+                    key={cat.value}
+                    type="button"
+                    onClick={() => setPurchaseCategory(cat.value)}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-xl border transition-all',
+                      purchaseCategory === cat.value
+                        ? 'border-violet-500 bg-violet-50 dark:bg-violet-950/40 dark:border-violet-500'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-violet-300 dark:hover:border-violet-700'
+                    )}
+                  >
+                    <span className="text-xl leading-none">{cat.emoji}</span>
+                    <span className={cn(
+                      'text-xs font-medium leading-tight text-center',
+                      purchaseCategory === cat.value
+                        ? 'text-violet-700 dark:text-violet-300'
+                        : 'text-slate-500 dark:text-slate-400'
+                    )}>
+                      {cat.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
+
             <div className="space-y-1.5">
               <Label>Data da compra</Label>
               <Input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} />
             </div>
+
             {!editingPurchase && (
               <div className="space-y-1.5">
                 <Label>Parcelas</Label>
@@ -716,6 +653,7 @@ const CreditCards = ({ session }: CreditCardsProps) => {
                 )}
               </div>
             )}
+
             <Button onClick={handleSavePurchase} className="w-full bg-violet-600 hover:bg-violet-700">
               {editingPurchase ? 'Salvar' : parseInt(purchaseInstallments) > 1 ? `Parcelar em ${purchaseInstallments}x` : 'Adicionar compra'}
             </Button>
@@ -723,13 +661,11 @@ const CreditCards = ({ session }: CreditCardsProps) => {
         </DialogContent>
       </Dialog>
 
-      {/* ── Bill Dialog ──────────────────────────────────────────────────────── */}
+      {/* Bill Dialog */}
       <Dialog open={showBillDialog} onOpenChange={setShowBillDialog}>
         {showBillDialog && <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setShowBillDialog(false)} />}
         <DialogContent className="sm:max-w-[360px] z-50">
-          <DialogHeader>
-            <DialogTitle>Lançar fatura no Dashboard</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Lançar fatura no Dashboard</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="rounded-xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/50 p-4 space-y-1">
               <p className="text-xs text-violet-600 dark:text-violet-400 font-medium">{selectedCard?.name}</p>
@@ -741,11 +677,10 @@ const CreditCards = ({ session }: CreditCardsProps) => {
               <Input type="date" value={billDueDate} onChange={e => setBillDueDate(e.target.value)} />
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Isso criará uma despesa de <strong>{formatCurrency(currentTotal)}</strong> na categoria "Pagamento de Dívidas" no seu Dashboard, com vencimento na data escolhida.
+              Isso criará uma despesa de <strong>{formatCurrency(currentTotal)}</strong> em "Pagamento de Dívidas" no Dashboard.
             </p>
             <Button onClick={handleLaunchBill} className="w-full bg-violet-600 hover:bg-violet-700 gap-2">
-              <Check className="w-4 h-4" />
-              Confirmar e lançar
+              <Check className="w-4 h-4" /> Confirmar e lançar
             </Button>
           </div>
         </DialogContent>
