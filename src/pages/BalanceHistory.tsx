@@ -1,3 +1,4 @@
+import { useDarkMode } from '@/hooks/useDarkMode';
 import { useState, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase, SupabaseTransaction } from '@/lib/supabase';
@@ -141,10 +142,7 @@ export default function BalanceHistory({ session }: BalanceHistoryProps) {
     return false;
   });
 
-  useEffect(() => {
-    if (darkMode) { document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark'); }
-    else { document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light'); }
-  }, [darkMode]);
+ const { darkMode, toggleDarkMode } = useDarkMode();
 
   useEffect(() => {
     const load = async () => {
