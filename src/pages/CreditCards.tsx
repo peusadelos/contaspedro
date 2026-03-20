@@ -1,3 +1,4 @@
+import { useDarkMode } from '@/hooks/useDarkMode';
 import { useState, useEffect, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
@@ -214,19 +215,7 @@ const CreditCards = ({ session }: CreditCardsProps) => {
   const [cardColor, setCardColor] = useState('#4F46E5');
   const [billDueDate, setBillDueDate] = useState('');
 
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark') ||
-        localStorage.getItem('theme') === 'dark' ||
-        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    if (darkMode) { document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark'); }
-    else { document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light'); }
-  }, [darkMode]);
+  const { darkMode, toggleDarkMode } = useDarkMode();
 
   const syncRecurringCharges = useCallback(async (
     card: CreditCardType, charges: RecurringCharge[], existingPurchases: CardPurchase[]
