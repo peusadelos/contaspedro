@@ -2,398 +2,542 @@ import { useState, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { Transaction, CategorySummary } from '@/types/financial';
 import { supabase, SupabaseTransaction } from '@/lib/supabase';
-import { SummaryCard } from '@/components/financial/SummaryCard';
-import { TransactionItem } from '@/components/financial/TransactionItem';
-import { CategoryChart } from '@/components/financial/CategoryChart';
 import { NewTransactionDialog } from '@/components/financial/NewTransactionDialog';
 import { DeleteConfirmationDialog } from '@/components/financial/DeleteConfirmationDialog';
 import { PiggyBankWidget } from '@/components/financial/PiggyBankWidget';
-import {
-  TrendingUp, TrendingDown, Wallet, AlertTriangle,
-  Trash2, ChevronLeft, ChevronRight, LogOut, Plus,
-  LayoutDashboard, Moon, Sun, Menu, FileText, History, CreditCard
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getTransactionStatus } from '@/lib/financialUtils';
+import {
+  Plus, Minus, TrendingUp, ChevronLeft, ChevronRight,
+  CreditCard, LayoutGrid, Receipt, LogOut, ChevronRight as ChevronRightIcon,
+  AlertTriangle
+} from 'lucide-react';
 
-const toMonthKey = (date: Date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  return `${y}-${m}`;
+// ─── Design tokens ─────────────────────────────────────────────────────────────
+// Updated to match Stitch style guide: Primary #4F46E5, Secondary #1E293B,
+// Tertiary #10B981, Neutral #64748B
+const C = {
+  // Primary — indigo
+  primary:              '#4F46E5',
+  primaryDark:          '#3730A3',
+  primaryLight:         '#818CF8',
+  primaryBg:            '#EEF2FF',
+
+  // Secondary — dark navy
+  secondary:            '#1E293B',
+  secondaryMid:         '#334155',
+  secondaryLight:       '#64748B',
+
+  // Tertiary — emerald (positive/income)
+  tertiary:             '#10B981',
+  tertiaryDark:         '#059669',
+  tertiaryBg:           '#D1FAE5',
+
+  // Neutral — slate
+  neutral:              '#64748B',
+  neutralLight:         '#94A3B8',
+  neutralBg:            '#F1F5F9',
+
+  // Error — red (expense/negative)
+  error:                '#EF4444',
+  errorBg:              '#FEE2E2',
+
+  // Surfaces — light blue-tinted layers
+  surface:              '#F8F9FF',
+  surfaceLowest:        '#FFFFFF',
+  surfaceLow:           '#EFF4FF',
+  surfaceMid:           '#E5EEFF',
+  surfaceHigh:          '#DCE9FF',
+
+  // Text
+  onSurface:            '#0F172A',
+  onSurfaceVariant:     '#475569',
+  onPrimary:            '#FFFFFF',
 };
 
-const formatMonthLabel = (monthKey: string) => {
-  const [year, month] = monthKey.split('-');
-  const date = new Date(Number(year), Number(month) - 1, 1);
-  return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const toMonthKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+const formatMonthLabel = (key: string) => {
+  const [y, m] = key.split('-');
+  return new Date(Number(y), Number(m) - 1, 1)
+    .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 };
+
+const fmt = (v: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(v));
+
+const fmtCompact = (v: number) =>
+  new Intl.NumberFormat('pt-BR', { notation: 'compact', style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).format(v);
 
 const fromSupabase = (row: SupabaseTransaction): Transaction => ({
-  id: row.id,
-  description: row.description,
-  amount: row.amount,
-  date: row.date,
-  createdDate: row.created_date,
-  dueDate: row.due_date,
+  id: row.id, description: row.description, amount: row.amount,
+  date: row.date, createdDate: row.created_date, dueDate: row.due_date,
   paidDate: row.paid_date ?? undefined,
   category: row.category as Transaction['category'],
   type: row.type as Transaction['type'],
-  isPaid: row.is_paid,
-  recurringGroup: row.recurring_group ?? undefined,
+  isPaid: row.is_paid, recurringGroup: row.recurring_group ?? undefined,
 });
 
 const toSupabase = (t: Omit<Transaction, 'id'>, userId: string) => ({
-  user_id: userId,
-  description: t.description,
-  amount: t.amount,
-  date: t.date,
-  created_date: t.createdDate,
-  due_date: t.dueDate,
-  paid_date: t.paidDate ?? null,
-  category: t.category,
-  type: t.type,
-  is_paid: t.isPaid,
-  recurring_group: (t as any).recurringGroup ?? null,
+  user_id: userId, description: t.description, amount: t.amount,
+  date: t.date, created_date: t.createdDate, due_date: t.dueDate,
+  paid_date: t.paidDate ?? null, category: t.category, type: t.type,
+  is_paid: t.isPaid, recurring_group: (t as any).recurringGroup ?? null,
 });
 
-interface DashboardProps {
-  session: Session;
-}
+const categoryEmoji: Record<string, string> = {
+  'Contas': '🏠', 'Gastos Pessoais': '🛒', 'Compras': '🛍️',
+  'Pagamento de Dívidas': '💳', 'Salário': '💼', 'Freela': '💻', 'Extra': '⭐',
+  'Alimentação': '🍔', 'Transporte': '🚗', 'Lazer': '🎮',
+  'Viagem': '✈️', 'Educação': '🎓', 'Pet': '🐾', 'Saúde': '❤️',
+};
 
-const Dashboard = ({ session }: DashboardProps) => {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>(undefined);
-  const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState<string>(toMonthKey(new Date()));
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+// ─── Bottom Nav Item ───────────────────────────────────────────────────────────
+const NavItem = ({ icon, label, active, to }: {
+  icon: React.ReactNode; label: string; active?: boolean; to: string;
+}) => (
+  <Link to={to} className="flex flex-col items-center justify-center px-5 py-2 rounded-2xl transition-all duration-200 active:scale-90"
+    style={{
+      background: active ? C.surfaceLow : 'transparent',
+      color: active ? C.primary : C.neutral,
+      fontFamily: 'Inter',
+    }}>
+    {icon}
+    <span className="text-[10px] font-semibold uppercase tracking-wider mt-1">{label}</span>
+  </Link>
+);
 
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark') ||
-        localStorage.getItem('theme') === 'dark' ||
-        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    if (darkMode) { document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark'); }
-    else { document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light'); }
-  }, [darkMode]);
-
-  useEffect(() => {
-    const fetchTransactions = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .order('due_date', { ascending: false });
-      if (error) { toast.error('Erro ao carregar transações'); }
-      else { setTransactions((data as SupabaseTransaction[]).map(fromSupabase)); }
-      setLoading(false);
-    };
-    fetchTransactions();
-  }, []);
-
-  useEffect(() => { setSelectedIds(new Set()); }, [selectedMonth, statusFilter]);
-
-  const handleAddTransaction = async (newTransactions: Omit<Transaction, 'id'>[]) => {
-    const rows = newTransactions.map(t => toSupabase(t, session.user.id));
-    const { data, error } = await supabase.from('transactions').insert(rows).select();
-    if (error) { toast.error('Erro ao adicionar transação'); }
-    else {
-      const added = (data as SupabaseTransaction[]).map(fromSupabase);
-      setTransactions(prev => [...added, ...prev]);
-      toast.success(added.length > 1 ? `${added.length} transações criadas!` : 'Transação adicionada!');
-    }
-  };
-
-  const handleEditTransaction = async (transaction: Transaction) => {
-    const { error } = await supabase.from('transactions').update(toSupabase(transaction, session.user.id)).eq('id', transaction.id);
-    if (error) { toast.error('Erro ao editar transação'); }
-    else {
-      setTransactions(prev => prev.map(t => t.id === transaction.id ? transaction : t));
-      setEditingTransaction(undefined);
-      toast.success('Transação atualizada!');
-    }
-  };
-
-  const handleDeleteTransaction = async () => {
-    if (!deletingTransaction) return;
-    const { error } = await supabase.from('transactions').delete().eq('id', deletingTransaction.id);
-    if (error) { toast.error('Erro ao excluir transação'); }
-    else {
-      setTransactions(prev => prev.filter(t => t.id !== deletingTransaction.id));
-      toast.success('Transação excluída!');
-      setDeletingTransaction(null);
-    }
-  };
-
-  const handleTogglePaid = async (id: string) => {
-    const t = transactions.find(t => t.id === id);
-    if (!t) return;
-    const updated = { ...t, isPaid: !t.isPaid, paidDate: !t.isPaid ? new Date().toISOString().split('T')[0] : undefined };
-    const { error } = await supabase.from('transactions').update({ is_paid: updated.isPaid, paid_date: updated.paidDate ?? null }).eq('id', id);
-    if (error) { toast.error('Erro ao atualizar status'); }
-    else { setTransactions(prev => prev.map(t => t.id === id ? updated : t)); toast.success('Status atualizado!'); }
-  };
-
-  const handleToggleSelect = (id: string) => {
-    setSelectedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  };
-
-  const handleSelectAll = () => {
-    if (selectedIds.size === pendingTransactions.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(pendingTransactions.map(t => t.id)));
-  };
-
-  const handleBulkDelete = async () => {
-    const ids = Array.from(selectedIds);
-    const { error } = await supabase.from('transactions').delete().in('id', ids);
-    if (error) { toast.error('Erro ao excluir transações'); }
-    else {
-      setTransactions(prev => prev.filter(t => !selectedIds.has(t.id)));
-      toast.success(`${ids.length} transação(ões) excluída(s)!`);
-      setSelectedIds(new Set());
-      setShowBulkDeleteConfirm(false);
-    }
-  };
-
-  const handleLogout = async () => { await supabase.auth.signOut(); };
-
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    const [year, month] = selectedMonth.split('-').map(Number);
-    const date = new Date(year, month - 1 + (direction === 'next' ? 1 : -1), 1);
-    setSelectedMonth(toMonthKey(date));
-  };
-
-  const transactionsInMonth = transactions.filter(t => t.dueDate.startsWith(selectedMonth));
-  const totalIncome = transactionsInMonth.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-  const totalExpense = transactionsInMonth.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-  const netBalance = totalIncome - totalExpense;
-  const incomeCount = transactionsInMonth.filter(t => t.type === 'income').length;
-  const expenseCount = transactionsInMonth.filter(t => t.type === 'expense').length;
-  const overdueTransactions = transactionsInMonth.filter(t => getTransactionStatus(t) === 'overdue');
-
-  const pendingTransactions = transactionsInMonth
-    .filter(t => { if (t.isPaid) return false; if (statusFilter === 'all') return true; return getTransactionStatus(t) === statusFilter; })
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-
-  const expensesByCategory: CategorySummary[] = transactionsInMonth
-    .filter(t => t.type === 'expense')
-    .reduce((acc, t) => {
-      const existing = acc.find(item => item.category === t.category);
-      if (existing) { existing.total += t.amount; } else { acc.push({ category: t.category, total: t.amount, color: '' }); }
-      return acc;
-    }, [] as CategorySummary[]);
-
-  const allSelected = pendingTransactions.length > 0 && selectedIds.size === pendingTransactions.length;
-  const someSelected = selectedIds.size > 0;
-
-  const addTrigger = (
-    <Button size="sm" className="h-8 bg-violet-600 hover:bg-violet-700 rounded-lg text-xs gap-1.5 px-2.5 sm:px-3">
-      <Plus className="w-3.5 h-3.5 flex-shrink-0" />
-      <span className="hidden sm:inline">Nova Transação</span>
-    </Button>
-  );
+// ─── Transaction Row ───────────────────────────────────────────────────────────
+const TxRow = ({ transaction, onTogglePaid, onEdit, onDelete }: {
+  transaction: Transaction;
+  onTogglePaid: (id: string) => void;
+  onEdit: (t: Transaction) => void;
+  onDelete: (t: Transaction) => void;
+}) => {
+  const isIncome = transaction.type === 'income';
+  const emoji = categoryEmoji[transaction.category] || '📌';
+  const date = new Date(transaction.dueDate + 'T12:00:00')
+    .toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-
-      <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center">
-              <LayoutDashboard className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-base text-slate-900 dark:text-slate-100 tracking-tight hidden sm:block">WeekLeaks</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500 dark:text-slate-400 hidden md:block truncate max-w-[160px]">{session.user.email}</span>
-            <NewTransactionDialog onAdd={handleAddTransaction} trigger={addTrigger} />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg px-2.5 gap-1.5">
-                  <Menu className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Menu</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem asChild>
-                  <Link to="/extrato" className="flex items-center gap-2 cursor-pointer">
-                    <FileText className="w-4 h-4 text-slate-500" /> Extrato
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/historico" className="flex items-center gap-2 cursor-pointer">
-                    <History className="w-4 h-4 text-slate-500" /> Histórico
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/cartoes" className="flex items-center gap-2 cursor-pointer">
-                    <CreditCard className="w-4 h-4 text-slate-500" /> Cartões
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setDarkMode(!darkMode)} className="flex items-center gap-2 cursor-pointer">
-                  {darkMode ? <Sun className="w-4 h-4 text-slate-500" /> : <Moon className="w-4 h-4 text-slate-500" />}
-                  {darkMode ? 'Modo claro' : 'Modo escuro'}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2 cursor-pointer text-rose-600 dark:text-rose-400 focus:text-rose-600">
-                  <LogOut className="w-4 h-4" /> Sair
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+    <div
+      className="flex items-center justify-between p-4 rounded-2xl cursor-pointer group transition-all duration-150"
+      style={{ background: C.surfaceLow }}
+      onMouseEnter={e => (e.currentTarget.style.background = C.surfaceMid)}
+      onMouseLeave={e => (e.currentTarget.style.background = C.surfaceLow)}
+    >
+      <div className="flex items-center gap-4">
+        {/* Icon */}
+        <div
+          className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-sm group-hover:scale-110 transition-transform duration-150"
+          style={{ background: C.surfaceLowest }}
+        >
+          {emoji}
         </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-3 sm:px-6 py-5 space-y-5">
-
-        {/* Month Navigator */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => navigateMonth('prev')} className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800">
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <h1 className="text-base font-semibold text-slate-900 dark:text-slate-100 w-36 sm:w-44 text-center capitalize">
-              {formatMonthLabel(selectedMonth)}
-            </h1>
-            <Button variant="ghost" size="icon" onClick={() => navigateMonth('next')} className="h-8 w-8 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800">
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
-          {overdueTransactions.length > 0 && (
-            <div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-400 rounded-xl px-2.5 py-1.5 flex-shrink-0">
-              <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-              <span className="text-xs font-medium whitespace-nowrap">
-                {overdueTransactions.length} atrasado{overdueTransactions.length > 1 ? 's' : ''}
-              </span>
-            </div>
-          )}
+        <div>
+          <h4 className="font-semibold text-sm" style={{ color: C.onSurface, fontFamily: 'Inter' }}>
+            {transaction.description}
+          </h4>
+          <p className="text-xs mt-0.5" style={{ color: C.onSurfaceVariant, fontFamily: 'Inter' }}>
+            {transaction.category} · {date}
+            {transaction.isPaid && <span className="ml-1.5 text-[10px] font-semibold" style={{ color: C.tertiary }}>● Pago</span>}
+          </p>
         </div>
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <SummaryCard title="Receitas" amount={totalIncome} icon={TrendingUp} variant="income"
-            subtitle={`${incomeCount} receita${incomeCount !== 1 ? 's' : ''} no mês`} />
-          <SummaryCard title="Despesas" amount={totalExpense} icon={TrendingDown} variant="expense"
-            subtitle={`${expenseCount} despesa${expenseCount !== 1 ? 's' : ''} no mês`} />
-          <SummaryCard title="Saldo líquido" amount={netBalance} icon={Wallet} variant="balance"
-            subtitle="Receitas − despesas do mês" />
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="font-bold text-sm" style={{
+          color: isIncome ? C.tertiary : C.error,
+          fontFamily: 'Inter'
+        }}>
+          {isIncome ? '+' : '−'}{fmt(transaction.amount)}
+        </span>
+        {/* Hover actions */}
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={e => { e.stopPropagation(); onTogglePaid(transaction.id); }}
+            className="w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold transition-colors hover:bg-white"
+            style={{ color: C.tertiary }} title="Marcar pago">✓</button>
+          <button onClick={e => { e.stopPropagation(); onEdit(transaction); }}
+            className="w-7 h-7 rounded-xl flex items-center justify-center text-xs transition-colors hover:bg-white"
+            style={{ color: C.neutral }} title="Editar">✎</button>
+          <button onClick={e => { e.stopPropagation(); onDelete(transaction); }}
+            className="w-7 h-7 rounded-xl flex items-center justify-center text-xs transition-colors hover:bg-white"
+            style={{ color: C.error }} title="Excluir">✕</button>
         </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-24">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-8 h-8 rounded-full border-2 border-violet-600 border-t-transparent animate-spin" />
-              <p className="text-sm text-slate-500">Carregando transações...</p>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-
-            {/* Pending Transactions */}
-            <div className="lg:col-span-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Pendentes</h2>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[130px] h-7 text-xs rounded-lg border-slate-200 dark:border-slate-700">
-                    <SelectValue placeholder="Filtrar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="overdue">🔴 Atrasados</SelectItem>
-                    <SelectItem value="pending">🟡 Pendentes</SelectItem>
-                    <SelectItem value="future">🔵 Futuros</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {pendingTransactions.length > 0 && (
-                <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-2">
-                    <input type="checkbox" checked={allSelected} onChange={handleSelectAll} className="w-4 h-4 cursor-pointer accent-violet-600" />
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                      {someSelected ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}
-                    </span>
-                  </div>
-                  {someSelected && (
-                    <Button size="sm" variant="destructive" onClick={() => setShowBulkDeleteConfirm(true)} className="h-6 text-xs gap-1 px-2.5">
-                      <Trash2 className="w-3 h-3" /> Excluir {selectedIds.size}
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              <div className="space-y-2">
-                {pendingTransactions.length > 0 ? (
-                  pendingTransactions.map(transaction => (
-                    <TransactionItem
-                      key={transaction.id}
-                      transaction={transaction}
-                      onTogglePaid={handleTogglePaid}
-                      onEdit={setEditingTransaction}
-                      onDelete={setDeletingTransaction}
-                      isSelected={selectedIds.has(transaction.id)}
-                      onToggleSelect={handleToggleSelect}
-                    />
-                  ))
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-16 text-center">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
-                      <Plus className="w-5 h-5 text-slate-400" />
-                    </div>
-                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Nenhuma transação pendente</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 capitalize">{formatMonthLabel(selectedMonth)}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Right column: Chart + Piggy Bank */}
-            <div className="lg:col-span-2 space-y-4">
-              <div>
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Resumo</h2>
-                <CategoryChart data={expensesByCategory} />
-              </div>
-
-              {/* ✅ Piggy Bank Widget */}
-              <PiggyBankWidget session={session} />
-            </div>
-          </div>
-        )}
-      </main>
-
-      {editingTransaction && (
-        <NewTransactionDialog transaction={editingTransaction} onEdit={handleEditTransaction} trigger={<div />} />
-      )}
-      <DeleteConfirmationDialog
-        open={!!deletingTransaction}
-        onOpenChange={(open) => !open && setDeletingTransaction(null)}
-        transaction={deletingTransaction}
-        onConfirm={handleDeleteTransaction}
-      />
-      <DeleteConfirmationDialog
-        open={showBulkDeleteConfirm}
-        onOpenChange={(open) => !open && setShowBulkDeleteConfirm(false)}
-        transaction={null}
-        customMessage={`Tem certeza que deseja excluir ${selectedIds.size} transação(ões)? Esta ação não pode ser desfeita.`}
-        onConfirm={handleBulkDelete}
-      />
+      </div>
     </div>
   );
 };
 
-export default Dashboard;
+// ─── Stat pill ─────────────────────────────────────────────────────────────────
+const StatPill = ({ label, value, positive }: { label: string; value: string; positive: boolean }) => (
+  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }}>
+    <div className="w-4 h-4 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
+      {positive ? <TrendingUp className="w-2.5 h-2.5 text-white" /> : <Minus className="w-2.5 h-2.5 text-white" />}
+    </div>
+    <span className="text-xs text-white/80 font-medium" style={{ fontFamily: 'Inter' }}>{label}</span>
+    <span className="text-xs text-white font-bold" style={{ fontFamily: 'Inter' }}>{value}</span>
+  </div>
+);
+
+// ─── Main ──────────────────────────────────────────────────────────────────────
+interface DashboardProps { session: Session; }
+
+export default function Dashboard({ session }: DashboardProps) {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState(toMonthKey(new Date()));
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>(undefined);
+  const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const { data, error } = await supabase.from('transactions').select('*').order('due_date', { ascending: false });
+      if (error) toast.error('Erro ao carregar transações');
+      else setTransactions((data as SupabaseTransaction[]).map(fromSupabase));
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const handleAdd = async (newTx: Omit<Transaction, 'id'>[]) => {
+    const rows = newTx.map(t => toSupabase(t, session.user.id));
+    const { data, error } = await supabase.from('transactions').insert(rows).select();
+    if (error) { toast.error('Erro ao adicionar'); return; }
+    const added = (data as SupabaseTransaction[]).map(fromSupabase);
+    setTransactions(prev => [...added, ...prev]);
+    toast.success(added.length > 1 ? `${added.length} transações criadas!` : 'Transação adicionada!');
+  };
+
+  const handleEdit = async (tx: Transaction) => {
+    const { error } = await supabase.from('transactions').update(toSupabase(tx, session.user.id)).eq('id', tx.id);
+    if (error) { toast.error('Erro ao editar'); return; }
+    setTransactions(prev => prev.map(t => t.id === tx.id ? tx : t));
+    setEditingTransaction(undefined);
+    toast.success('Atualizada!');
+  };
+
+  const handleDelete = async () => {
+    if (!deletingTransaction) return;
+    const { error } = await supabase.from('transactions').delete().eq('id', deletingTransaction.id);
+    if (error) { toast.error('Erro ao excluir'); return; }
+    setTransactions(prev => prev.filter(t => t.id !== deletingTransaction.id));
+    toast.success('Excluída!');
+    setDeletingTransaction(null);
+  };
+
+  const handleToggle = async (id: string) => {
+    const t = transactions.find(t => t.id === id);
+    if (!t) return;
+    const updated = { ...t, isPaid: !t.isPaid, paidDate: !t.isPaid ? new Date().toISOString().split('T')[0] : undefined };
+    const { error } = await supabase.from('transactions').update({ is_paid: updated.isPaid, paid_date: updated.paidDate ?? null }).eq('id', id);
+    if (error) { toast.error('Erro'); return; }
+    setTransactions(prev => prev.map(t => t.id === id ? updated : t));
+  };
+
+  const navigateMonth = (dir: 'prev' | 'next') => {
+    const [y, m] = selectedMonth.split('-').map(Number);
+    setSelectedMonth(toMonthKey(new Date(y, m - 1 + (dir === 'next' ? 1 : -1), 1)));
+  };
+
+  // Derived
+  const txMonth = transactions.filter(t => t.dueDate.startsWith(selectedMonth));
+  const totalIncome = txMonth.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const totalExpense = txMonth.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const netBalance = totalIncome - totalExpense;
+  const overdueCount = txMonth.filter(t => getTransactionStatus(t) === 'overdue').length;
+  const recentTx = transactions.slice(0, 5);
+
+  // Spending by category
+  const expByCat = txMonth.filter(t => t.type === 'expense').reduce((acc, t) => {
+    acc[t.category] = (acc[t.category] || 0) + t.amount;
+    return acc;
+  }, {} as Record<string, number>);
+  const totalExp = Object.values(expByCat).reduce((s, v) => s + v, 0);
+  const topCats = Object.entries(expByCat).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+  // Donut segments
+  const DONUT_COLORS = [C.primary, C.tertiary, C.primaryLight];
+  let donutOffset = 25;
+  const segments = topCats.map(([cat, val], i) => {
+    const pct = totalExp > 0 ? (val / totalExp) * 100 : 0;
+    const seg = { cat, val, pct, color: DONUT_COLORS[i], offset: donutOffset };
+    donutOffset -= pct;
+    return seg;
+  });
+
+  const addTrigger = (
+    <button
+      className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 hover:scale-105 duration-150"
+      style={{ background: '#6FFBBE', color: '#065F46', fontFamily: 'Inter', boxShadow: '0 4px 14px rgba(111,255,190,0.3)' }}
+    >
+      <Plus className="w-4 h-4" /> Nova Transação
+    </button>
+  );
+
+  return (
+    <div className="min-h-screen pb-32" style={{ background: C.surface, fontFamily: 'Inter' }}>
+
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-40" style={{ background: C.surface }}>
+        <div className="flex justify-between items-center px-5 py-4 max-w-2xl mx-auto">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold text-sm"
+              style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})` }}
+            >
+              {session.user.email?.[0]?.toUpperCase() ?? 'W'}
+            </div>
+            <div>
+              <p className="text-xs font-medium" style={{ color: C.neutral }}>Bem-vindo,</p>
+              <h1 className="font-bold text-base leading-tight" style={{ color: C.onSurface, fontFamily: 'Plus Jakarta Sans' }}>
+                WeekLeaks
+              </h1>
+            </div>
+          </div>
+          <button
+            onClick={async () => await supabase.auth.signOut()}
+            className="w-10 h-10 rounded-2xl flex items-center justify-center transition-colors"
+            style={{ background: C.surfaceLow, color: C.neutral }}
+            title="Sair"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      </header>
+
+      <main className="max-w-2xl mx-auto px-5 space-y-5">
+
+        {/* ── Hero: Balance Card ───────────────────────────────────────────── */}
+        <div
+          className="rounded-[2rem] p-7 text-white relative overflow-hidden"
+          style={{
+            background: `linear-gradient(135deg, ${C.primary} 0%, ${C.primaryDark} 100%)`,
+            boxShadow: `0 20px 40px ${C.primary}26`,
+          }}
+        >
+          {/* Decorative blobs */}
+          <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full opacity-10"
+            style={{ background: 'white', filter: 'blur(32px)' }} />
+          <div className="absolute -bottom-8 -left-8 w-40 h-40 rounded-full opacity-10"
+            style={{ background: C.tertiary, filter: 'blur(28px)' }} />
+
+          <div className="relative z-10">
+            {/* Month nav */}
+            <div className="flex items-center gap-2 mb-3">
+              <button onClick={() => navigateMonth('prev')} className="opacity-60 hover:opacity-100 transition-opacity active:scale-90">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs font-semibold uppercase tracking-widest opacity-70 capitalize" style={{ fontFamily: 'Inter' }}>
+                {formatMonthLabel(selectedMonth)}
+              </span>
+              <button onClick={() => navigateMonth('next')} className="opacity-60 hover:opacity-100 transition-opacity active:scale-90">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Balance */}
+            <p className="text-xs font-semibold uppercase tracking-widest opacity-60 mb-1" style={{ fontFamily: 'Inter' }}>
+              Saldo Líquido
+            </p>
+            <h2
+              className="font-extrabold tracking-tight mb-5"
+              style={{ fontSize: '2.75rem', fontFamily: 'Plus Jakarta Sans', lineHeight: 1.05 }}
+            >
+              {netBalance < 0 ? '−' : ''}{fmt(netBalance)}
+            </h2>
+
+            {/* Stat pills */}
+            <div className="flex flex-wrap gap-2 mb-6">
+              <StatPill label="Receitas" value={fmt(totalIncome)} positive={true} />
+              <StatPill label="Despesas" value={fmt(totalExpense)} positive={false} />
+              {overdueCount > 0 && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(239,68,68,0.25)' }}>
+                  <AlertTriangle className="w-3 h-3 text-red-300" />
+                  <span className="text-xs text-red-200 font-semibold">{overdueCount} atrasado{overdueCount > 1 ? 's' : ''}</span>
+                </div>
+              )}
+            </div>
+
+            {/* CTA */}
+            <div className="flex gap-3 flex-wrap">
+              <NewTransactionDialog onAdd={handleAdd} trigger={addTrigger} />
+              <Link
+                to="/extrato"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95"
+                style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', color: '#fff', fontFamily: 'Inter' }}
+              >
+                Ver Extrato <ChevronRightIcon className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-8 h-8 rounded-full border-2 animate-spin"
+              style={{ borderColor: C.primary, borderTopColor: 'transparent' }} />
+          </div>
+        ) : (
+          <>
+            {/* ── Two-col: Spending + Piggy Bank ──────────────────────────── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+              {/* Spending donut */}
+              <div
+                className="rounded-[1.75rem] p-5"
+                style={{ background: C.surfaceLowest, boxShadow: '0 8px 24px rgba(15,23,42,0.05)' }}
+              >
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-base" style={{ color: C.onSurface, fontFamily: 'Plus Jakarta Sans' }}>
+                    Gastos
+                  </h3>
+                  <Link to="/extrato" className="text-xs font-semibold" style={{ color: C.primary }}>Ver tudo</Link>
+                </div>
+
+                {totalExp === 0 ? (
+                  <p className="text-sm text-center py-6" style={{ color: C.onSurfaceVariant }}>Sem despesas</p>
+                ) : (
+                  <div className="flex items-center gap-5">
+                    {/* Donut */}
+                    <div className="relative w-28 h-28 flex-shrink-0">
+                      <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                        <circle cx="18" cy="18" r="15.915" fill="transparent" stroke={C.surfaceLow} strokeWidth="3.5" />
+                        {segments.map((seg, i) => (
+                          <circle key={i} cx="18" cy="18" r="15.915" fill="transparent"
+                            stroke={seg.color} strokeWidth="3.5"
+                            strokeDasharray={`${seg.pct} ${100 - seg.pct}`}
+                            strokeDashoffset={-seg.offset + 25}
+                            style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                          />
+                        ))}
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-[9px] font-bold uppercase tracking-wide" style={{ color: C.neutral }}>Total</span>
+                        <span className="text-sm font-extrabold" style={{ color: C.onSurface, fontFamily: 'Plus Jakarta Sans' }}>
+                          {fmtCompact(totalExp)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Legend */}
+                    <div className="space-y-2.5 flex-1 min-w-0">
+                      {segments.map((seg, i) => (
+                        <div key={i} className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: seg.color }} />
+                            <span className="text-xs font-medium truncate" style={{ color: C.onSurfaceVariant }}>{seg.cat}</span>
+                          </div>
+                          <span className="text-xs font-bold flex-shrink-0" style={{ color: C.onSurface }}>
+                            {totalExp > 0 ? Math.round((seg.val / totalExp) * 100) : 0}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Piggy bank */}
+              <PiggyBankWidget session={session} />
+            </div>
+
+            {/* ── Recent Activity ─────────────────────────────────────────── */}
+            <div
+              className="rounded-[1.75rem] p-6"
+              style={{ background: C.surfaceLowest, boxShadow: '0 8px 24px rgba(15,23,42,0.05)' }}
+            >
+              <div className="flex justify-between items-center mb-5">
+                <h3 className="font-bold text-lg" style={{ color: C.onSurface, fontFamily: 'Plus Jakarta Sans' }}>
+                  Atividade Recente
+                </h3>
+                <Link to="/extrato" className="text-xs font-semibold" style={{ color: C.primary }}>Ver tudo</Link>
+              </div>
+
+              {recentTx.length === 0 ? (
+                <div className="text-center py-10">
+                  <p className="text-sm font-medium" style={{ color: C.onSurfaceVariant }}>Nenhuma transação ainda</p>
+                  <p className="text-xs mt-1" style={{ color: C.neutral }}>Adicione sua primeira transação acima</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {recentTx.map(tx => (
+                    <TxRow key={tx.id} transaction={tx}
+                      onTogglePaid={handleToggle}
+                      onEdit={setEditingTransaction}
+                      onDelete={setDeletingTransaction}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ── Insight Banner ───────────────────────────────────────────── */}
+            <div
+              className="rounded-[1.75rem] p-6 mb-4"
+              style={{ background: C.surfaceHigh, boxShadow: '0 4px 16px rgba(15,23,42,0.04)' }}
+            >
+              <span
+                className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-3"
+                style={{ background: `${C.primary}18`, color: C.primary }}
+              >
+                Dica Financeira
+              </span>
+              <h3 className="font-extrabold text-xl mb-2" style={{ color: C.onSurface, fontFamily: 'Plus Jakarta Sans' }}>
+                Maximize sua poupança esta semana
+              </h3>
+              <p className="text-sm leading-relaxed mb-5" style={{ color: C.onSurfaceVariant }}>
+                Revise suas transações recorrentes e identifique gastos que podem ser reduzidos ou eliminados este mês.
+              </p>
+              <div className="flex gap-3 flex-wrap">
+                <Link to="/historico"
+                  className="px-5 py-2.5 rounded-xl font-bold text-sm text-white inline-flex items-center gap-2 transition-all active:scale-95 hover:shadow-lg"
+                  style={{ background: C.primary, boxShadow: `0 4px 16px ${C.primary}30` }}
+                >
+                  Ver Histórico <ChevronRightIcon className="w-4 h-4" />
+                </Link>
+                <Link to="/cartoes"
+                  className="px-5 py-2.5 rounded-xl font-bold text-sm inline-flex items-center gap-2 transition-all active:scale-95"
+                  style={{ background: C.surfaceLowest, color: C.primary }}
+                >
+                  Cartões <CreditCard className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+          </>
+        )}
+      </main>
+
+      {/* ── Bottom Nav ──────────────────────────────────────────────────────── */}
+      <nav
+        className="fixed bottom-0 left-0 w-full z-50 px-4 pb-safe pb-6 pt-3 flex justify-around items-center rounded-t-3xl"
+        style={{
+          background: 'rgba(255,255,255,0.88)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          borderTop: `1px solid ${C.onSurface}0D`,
+          boxShadow: '0 -8px 32px rgba(15,23,42,0.06)',
+        }}
+      >
+        <NavItem to="/" active icon={<LayoutGrid className="w-5 h-5" />} label="Home" />
+        <NavItem to="/extrato" icon={<Receipt className="w-5 h-5" />} label="Extrato" />
+        <NavItem to="/cartoes" icon={<CreditCard className="w-5 h-5" />} label="Cartões" />
+        <NavItem to="/historico" icon={<TrendingUp className="w-5 h-5" />} label="Histórico" />
+      </nav>
+
+      {/* ── Dialogs ─────────────────────────────────────────────────────────── */}
+      {editingTransaction && (
+        <NewTransactionDialog transaction={editingTransaction} onEdit={handleEdit} trigger={<div />} />
+      )}
+      <DeleteConfirmationDialog
+        open={!!deletingTransaction}
+        onOpenChange={open => !open && setDeletingTransaction(null)}
+        transaction={deletingTransaction}
+        onConfirm={handleDelete}
+      />
+    </div>
+  );
+}
