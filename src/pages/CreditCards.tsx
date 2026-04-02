@@ -217,10 +217,34 @@ export default function CreditCards({ session }: CreditCardsProps) {
   const handleLaunchBill = async () => {
     if (!selectedCard || currentTotal === 0) return;
     const today = new Date().toISOString().split('T')[0];
-    const payload = { user_id: session.user.id, description: `Fatura ${selectedCard.name}`, amount: currentTotal, date: billDueDate, created_date: today, due_date: billDueDate, paid_date: null, category: 'Pagamento de Dívidas', type: 'expense', is_paid: false, recurring_group: null };
-    const { error } = await supabase.from('transactions').insert(payload);
-    if (error) { toast.error('Erro ao lançar fatura'); return; }
-    toast.success(`Fatura de ${fmt(currentTotal)} lançada no Dashboard!`);
+    const description = `Fatura ${selectedCard.name}`;
+
+    // Check if a bill for this card already exists (same description + same user)
+    const { data: existing } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('user_id', session.user.id)
+      .eq('description', description)
+      .eq('category', 'Pagamento de Dívidas')
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      // ✅ Already exists — just update amount and due date
+      const { error } = await supabase
+        .from('transactions')
+        .update({ amount: currentTotal, due_date: billDueDate, date: billDueDate })
+        .eq('id', existing.id);
+      if (error) { toast.error('Erro ao atualizar fatura'); return; }
+      toast.success(`Fatura atualizada para ${fmt(currentTotal)}!`);
+    } else {
+      // ✅ First time — insert new
+      const payload = { user_id: session.user.id, description, amount: currentTotal, date: billDueDate, created_date: today, due_date: billDueDate, paid_date: null, category: 'Pagamento de Dívidas', type: 'expense', is_paid: false, recurring_group: null };
+      const { error } = await supabase.from('transactions').insert(payload);
+      if (error) { toast.error('Erro ao lançar fatura'); return; }
+      toast.success(`Fatura de ${fmt(currentTotal)} lançada no Dashboard!`);
+    }
+
     setShowBillDialog(false);
   };
 
@@ -491,7 +515,7 @@ export default function CreditCards({ session }: CreditCardsProps) {
               <p className="text-xs text-indigo-600/70 dark:text-indigo-500">{currentPeriodPurchases.length} compras na fatura atual</p>
             </div>
             <div className="space-y-1.5"><Label>Data de vencimento</Label><Input type="date" value={billDueDate} onChange={e => setBillDueDate(e.target.value)} /></div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Isso criará uma despesa de <strong>{fmt(currentTotal)}</strong> na categoria "Pagamento de Dívidas" no seu Dashboard.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Se já existe uma fatura deste cartão no Dashboard, o valor será <strong>atualizado</strong>. Caso contrário, uma nova despesa será criada em "Pagamento de Dívidas".</p>
             <Button onClick={handleLaunchBill} className="w-full bg-indigo-600 hover:bg-indigo-700 gap-2"><Check className="w-4 h-4" /> Confirmar e lançar</Button>
           </div>
         </DialogContent>
