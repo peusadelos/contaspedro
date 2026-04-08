@@ -14,7 +14,7 @@ import {
   ChevronLeft, ChevronRight, CreditCard, LayoutGrid,
   Receipt, LogOut, Moon, Sun, Menu, FileText,
   History, AlertTriangle, ChevronRight as ChevronRightIcon,
-  Trash2
+  Trash2, ArrowDownCircle, ArrowUpCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -27,9 +27,7 @@ import { cn } from '@/lib/utils';
 const C = {
   primary: '#4F46E5', primaryDark: '#3730A3', primaryLight: '#818CF8',
   tertiary: '#10B981', error: '#EF4444',
-  surface: '#F8F9FF', surfaceLowest: '#FFFFFF', surfaceLow: '#EFF4FF',
-  surfaceMid: '#E5EEFF', surfaceHigh: '#DCE9FF',
-  onSurface: '#0F172A', onSurfaceVariant: '#475569', neutral: '#64748B',
+  surfaceLow: '#EFF4FF', onSurface: '#0F172A', onSurfaceVariant: '#475569', neutral: '#64748B',
 };
 
 const toMonthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -63,9 +61,9 @@ const categoryEmoji: Record<string, string> = {
 };
 
 const BottomNavItem = ({ icon, label, to, active }: { icon: React.ReactNode; label: string; to: string; active?: boolean }) => (
-  <Link to={to} className={cn('flex flex-col items-center justify-center px-4 py-2 rounded-2xl transition-all duration-200 active:scale-90 gap-0.5', active ? 'text-[#4F46E5] dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400 hover:text-[#4F46E5]')} style={active ? { background: C.surfaceLow } : {}}>
+  <Link to={to} className={cn('flex flex-col items-center justify-center px-3 py-2 rounded-2xl transition-all duration-200 active:scale-90 gap-0.5 min-w-0', active ? 'text-[#4F46E5] dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400')} style={active ? { background: C.surfaceLow } : {}}>
     {icon}
-    <span className="text-[10px] font-semibold uppercase tracking-wider">{label}</span>
+    <span className="text-[10px] font-semibold uppercase tracking-wider leading-none">{label}</span>
   </Link>
 );
 
@@ -109,7 +107,7 @@ interface DashboardProps { session: Session; }
 
 export default function Dashboard({ session }: DashboardProps) {
   const location = useLocation();
-  const { darkMode, toggleDarkMode } = useDarkMode(); // ✅ shared hook
+  const { darkMode, toggleDarkMode } = useDarkMode();
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,16 +184,30 @@ export default function Dashboard({ session }: DashboardProps) {
     setSelectedMonth(toMonthKey(new Date(y, m - 1 + (dir === 'next' ? 1 : -1), 1)));
   };
 
+  // ─── Month transactions ────────────────────────────────────────────────────
   const txMonth = transactions.filter(t => t.dueDate.startsWith(selectedMonth));
-  const totalIncome  = txMonth.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const totalExpense = txMonth.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const netBalance   = totalIncome - totalExpense;
-  const incomeCount  = txMonth.filter(t => t.type === 'income').length;
-  const expenseCount = txMonth.filter(t => t.type === 'expense').length;
-  const overdueCount = txMonth.filter(t => getTransactionStatus(t) === 'overdue').length;
 
-  const pendingTx = txMonth.filter(t => { if (t.isPaid) return false; if (statusFilter === 'all') return true; return getTransactionStatus(t) === statusFilter; }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  // Hero card — full month projection (all transactions regardless of paid status)
+  const projectedIncome   = txMonth.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const projectedExpense  = txMonth.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const projectedBalance  = projectedIncome - projectedExpense;
+  const overdueCount      = txMonth.filter(t => getTransactionStatus(t) === 'overdue').length;
 
+  // ✅ Summary cards — only paid/received transactions (real money moved)
+  const realIncome   = txMonth.filter(t => t.type === 'income'  && t.isPaid).reduce((s, t) => s + t.amount, 0);
+  const realExpense  = txMonth.filter(t => t.type === 'expense' && t.isPaid).reduce((s, t) => s + t.amount, 0);
+  const realBalance  = realIncome - realExpense;
+  const paidIncomeCount   = txMonth.filter(t => t.type === 'income'  && t.isPaid).length;
+  const paidExpenseCount  = txMonth.filter(t => t.type === 'expense' && t.isPaid).length;
+
+  // Pending list (unpaid only)
+  const pendingTx = txMonth.filter(t => {
+    if (t.isPaid) return false;
+    if (statusFilter === 'all') return true;
+    return getTransactionStatus(t) === statusFilter;
+  }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+  // Donut chart — all expenses for the month
   const expByCat = txMonth.filter(t => t.type === 'expense').reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {} as Record<string, number>);
   const totalExp = Object.values(expByCat).reduce((s, v) => s + v, 0);
   const topCats  = Object.entries(expByCat).sort((a, b) => b[1] - a[1]).slice(0, 3);
@@ -208,18 +220,19 @@ export default function Dashboard({ session }: DashboardProps) {
     return seg;
   });
 
-  const allSelected = pendingTx.length > 0 && selectedIds.size === pendingTx.length;
+  const allSelected  = pendingTx.length > 0 && selectedIds.size === pendingTx.length;
   const someSelected = selectedIds.size > 0;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 sm:pb-0">
 
+      {/* ── Header ── */}
       <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 flex-shrink-0">
+          <Link to="/" className="flex items-center gap-2.5 flex-shrink-0">
             <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-sm" style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})` }}>W</div>
             <span className="font-bold text-base text-slate-900 dark:text-slate-100 tracking-tight hidden sm:block">WeekLeaks</span>
-          </div>
+          </Link>
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-slate-500 dark:text-slate-400 hidden md:block truncate max-w-[160px]">{session.user.email}</span>
             <NewTransactionDialog onAdd={handleAdd} trigger={
@@ -227,7 +240,6 @@ export default function Dashboard({ session }: DashboardProps) {
                 <Plus className="w-3.5 h-3.5 flex-shrink-0" /><span className="hidden sm:inline">Nova Transação</span>
               </Button>
             } />
-            {/* Hamburger — desktop only */}
             <div className="hidden sm:flex">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -240,7 +252,6 @@ export default function Dashboard({ session }: DashboardProps) {
                   <DropdownMenuItem asChild><Link to="/historico" className="flex items-center gap-2 cursor-pointer"><History className="w-4 h-4 text-slate-500" /> Histórico</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/cartoes" className="flex items-center gap-2 cursor-pointer"><CreditCard className="w-4 h-4 text-slate-500" /> Cartões</Link></DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  {/* ✅ Dark mode toggle */}
                   <DropdownMenuItem onClick={toggleDarkMode} className="flex items-center gap-2 cursor-pointer">
                     {darkMode ? <Sun className="w-4 h-4 text-slate-500" /> : <Moon className="w-4 h-4 text-slate-500" />}
                     {darkMode ? 'Modo claro' : 'Modo escuro'}
@@ -256,7 +267,8 @@ export default function Dashboard({ session }: DashboardProps) {
       </header>
 
       <main className="max-w-6xl mx-auto px-3 sm:px-6 py-5 space-y-5">
-        {/* Hero Card */}
+
+        {/* ── Hero Card — full month projection ── */}
         <div className="rounded-2xl p-6 sm:p-8 text-white relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${C.primary} 0%, ${C.primaryDark} 100%)`, boxShadow: `0 20px 40px ${C.primary}26` }}>
           <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full opacity-10" style={{ background: 'white', filter: 'blur(32px)' }} />
           <div className="absolute -bottom-8 -left-8 w-40 h-40 rounded-full opacity-10" style={{ background: C.tertiary, filter: 'blur(28px)' }} />
@@ -268,11 +280,11 @@ export default function Dashboard({ session }: DashboardProps) {
                 <button onClick={() => navigateMonth('next')} className="opacity-60 hover:opacity-100 transition-opacity"><ChevronRight className="w-4 h-4" /></button>
               </div>
               <p className="text-xs font-semibold uppercase tracking-widest opacity-60 mb-1">Saldo Líquido</p>
-              <h2 className="font-extrabold tracking-tight mb-4 text-4xl sm:text-5xl leading-none">{netBalance < 0 ? '−' : ''}{fmt(netBalance)}</h2>
+              <h2 className="font-extrabold tracking-tight mb-4 text-4xl sm:text-5xl leading-none">{projectedBalance < 0 ? '−' : ''}{fmt(projectedBalance)}</h2>
               <div className="flex flex-wrap gap-2">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }}><TrendingUp className="w-3 h-3" /><span className="text-xs opacity-80">Receitas</span><span className="text-xs font-bold">{fmt(totalIncome)}</span></div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }}><Minus className="w-3 h-3" /><span className="text-xs opacity-80">Despesas</span><span className="text-xs font-bold">{fmt(totalExpense)}</span></div>
-                {overdueCount > 0 && (<div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(239,68,68,0.25)' }}><AlertTriangle className="w-3 h-3 text-red-300" /><span className="text-xs font-semibold text-red-200">{overdueCount} atrasado{overdueCount > 1 ? 's' : ''}</span></div>)}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }}><TrendingUp className="w-3 h-3" /><span className="text-xs opacity-80">Receitas</span><span className="text-xs font-bold">{fmt(projectedIncome)}</span></div>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.12)' }}><Minus className="w-3 h-3" /><span className="text-xs opacity-80">Despesas</span><span className="text-xs font-bold">{fmt(projectedExpense)}</span></div>
+                {overdueCount > 0 && <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(239,68,68,0.25)' }}><AlertTriangle className="w-3 h-3 text-red-300" /><span className="text-xs font-semibold text-red-200">{overdueCount} atrasado{overdueCount > 1 ? 's' : ''}</span></div>}
               </div>
             </div>
             <Link to="/extrato" className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 w-fit" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', color: '#fff' }}>
@@ -281,22 +293,59 @@ export default function Dashboard({ session }: DashboardProps) {
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { title: 'Receitas', amount: totalIncome, icon: TrendingUp, cls: { bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-800/50', iB: 'bg-emerald-100 dark:bg-emerald-900/50', iC: 'text-emerald-600 dark:text-emerald-400', lbl: 'text-emerald-700 dark:text-emerald-400', amt: 'text-emerald-800 dark:text-emerald-300', sub: 'text-emerald-600/70 dark:text-emerald-500/70' }, sub: `${incomeCount} receita${incomeCount !== 1 ? 's' : ''} no mês`, prefix: '' },
-            { title: 'Despesas', amount: totalExpense, icon: TrendingDown, cls: { bg: 'bg-rose-50 dark:bg-rose-950/30', border: 'border-rose-200 dark:border-rose-800/50', iB: 'bg-rose-100 dark:bg-rose-900/50', iC: 'text-rose-600 dark:text-rose-400', lbl: 'text-rose-700 dark:text-rose-400', amt: 'text-rose-800 dark:text-rose-300', sub: 'text-rose-600/70 dark:text-rose-500/70' }, sub: `${expenseCount} despesa${expenseCount !== 1 ? 's' : ''} no mês`, prefix: totalExpense > 0 ? '−' : '' },
-            { title: 'Saldo Líquido', amount: netBalance, icon: Wallet, cls: { bg: 'bg-violet-50 dark:bg-violet-950/30', border: 'border-violet-200 dark:border-violet-800/50', iB: 'bg-violet-100 dark:bg-violet-900/50', iC: 'text-violet-600 dark:text-violet-400', lbl: 'text-violet-700 dark:text-violet-400', amt: 'text-violet-800 dark:text-violet-300', sub: 'text-violet-600/70 dark:text-violet-500/70' }, sub: 'Receitas − despesas do mês', prefix: netBalance < 0 ? '−' : '' },
-          ].map(({ title, amount, icon: Icon, cls, sub, prefix }) => (
-            <div key={title} className={cn('rounded-2xl border p-5 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5', cls.bg, cls.border)}>
+        {/* ── Summary Cards — REAL (paid/received only) ── */}
+        <div>
+          {/* Label explaining these are real values */}
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+            Valores confirmados — apenas lançamentos pagos/recebidos
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Receitas reais */}
+            <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/30 p-5 transition-all hover:shadow-md hover:-translate-y-0.5">
               <div className="flex items-start justify-between mb-3">
-                <p className={cn('text-xs font-semibold uppercase tracking-wider', cls.lbl)}>{title}</p>
-                <div className={cn('p-2 rounded-xl', cls.iB)}><Icon className={cn('w-4 h-4', cls.iC)} /></div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Receitas</p>
+                <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/50"><ArrowDownCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /></div>
               </div>
-              <p className={cn('text-2xl font-bold tracking-tight', cls.amt)}>{prefix}{fmt(amount)}</p>
-              <p className={cn('text-xs mt-1.5', cls.sub)}>{sub}</p>
+              <p className="text-2xl font-bold tracking-tight text-emerald-800 dark:text-emerald-300">{fmt(realIncome)}</p>
+              <p className="text-xs mt-1.5 text-emerald-600/70 dark:text-emerald-500/70">
+                {paidIncomeCount} recebida{paidIncomeCount !== 1 ? 's' : ''}
+                {projectedIncome > realIncome && (
+                  <span className="ml-1 opacity-70">· {fmt(projectedIncome - realIncome)} a receber</span>
+                )}
+              </p>
             </div>
-          ))}
+
+            {/* Despesas reais */}
+            <div className="rounded-2xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/30 p-5 transition-all hover:shadow-md hover:-translate-y-0.5">
+              <div className="flex items-start justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-400">Despesas</p>
+                <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-900/50"><ArrowUpCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" /></div>
+              </div>
+              <p className="text-2xl font-bold tracking-tight text-rose-800 dark:text-rose-300">{realExpense > 0 ? '−' : ''}{fmt(realExpense)}</p>
+              <p className="text-xs mt-1.5 text-rose-600/70 dark:text-rose-500/70">
+                {paidExpenseCount} paga{paidExpenseCount !== 1 ? 's' : ''}
+                {projectedExpense > realExpense && (
+                  <span className="ml-1 opacity-70">· {fmt(projectedExpense - realExpense)} a pagar</span>
+                )}
+              </p>
+            </div>
+
+            {/* Saldo real */}
+            <div className="rounded-2xl border border-violet-200 dark:border-violet-800/50 bg-violet-50 dark:bg-violet-950/30 p-5 transition-all hover:shadow-md hover:-translate-y-0.5">
+              <div className="flex items-start justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-violet-700 dark:text-violet-400">Saldo Real</p>
+                <div className="p-2 rounded-xl bg-violet-100 dark:bg-violet-900/50"><Wallet className="w-4 h-4 text-violet-600 dark:text-violet-400" /></div>
+              </div>
+              <p className="text-2xl font-bold tracking-tight text-violet-800 dark:text-violet-300">{realBalance < 0 ? '−' : ''}{fmt(realBalance)}</p>
+              <p className="text-xs mt-1.5 text-violet-600/70 dark:text-violet-500/70">
+                Recebido − pago
+                {projectedBalance !== realBalance && (
+                  <span className="ml-1 opacity-70">· projeção: {projectedBalance < 0 ? '−' : ''}{fmt(projectedBalance)}</span>
+                )}
+              </p>
+            </div>
+          </div>
         </div>
 
         {loading ? (
@@ -305,7 +354,8 @@ export default function Dashboard({ session }: DashboardProps) {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            {/* Pending */}
+
+            {/* ── Pending ── */}
             <div className="lg:col-span-3 space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Pendentes</h2>
@@ -319,15 +369,17 @@ export default function Dashboard({ session }: DashboardProps) {
                   </SelectContent>
                 </Select>
               </div>
+
               {pendingTx.length > 0 && (
                 <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-2">
                     <input type="checkbox" checked={allSelected} onChange={handleSelectAll} className="w-4 h-4 cursor-pointer accent-violet-600" />
                     <span className="text-xs text-slate-500 dark:text-slate-400">{someSelected ? `${selectedIds.size} selecionada(s)` : 'Selecionar todas'}</span>
                   </div>
-                  {someSelected && (<Button size="sm" variant="destructive" onClick={() => setShowBulkDeleteConfirm(true)} className="h-6 text-xs gap-1 px-2.5"><Trash2 className="w-3 h-3" /> Excluir {selectedIds.size}</Button>)}
+                  {someSelected && <Button size="sm" variant="destructive" onClick={() => setShowBulkDeleteConfirm(true)} className="h-6 text-xs gap-1 px-2.5"><Trash2 className="w-3 h-3" /> Excluir {selectedIds.size}</Button>}
                 </div>
               )}
+
               <div className="space-y-2">
                 {pendingTx.length > 0 ? pendingTx.map(tx => (
                   <TxRow key={tx.id} transaction={tx} onTogglePaid={handleToggle} onEdit={setEditingTransaction} onDelete={setDeletingTransaction} />
@@ -341,7 +393,7 @@ export default function Dashboard({ session }: DashboardProps) {
               </div>
             </div>
 
-            {/* Right column */}
+            {/* ── Right column ── */}
             <div className="lg:col-span-2 space-y-4">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Resumo</h2>
               <div className="rounded-2xl border border-border bg-card p-5">
@@ -357,7 +409,9 @@ export default function Dashboard({ session }: DashboardProps) {
                       <svg viewBox="0 0 36 36" className="w-full h-full">
                         <circle cx="18" cy="18" r="15.915" fill="transparent" stroke="#EFF4FF" strokeWidth="3.5" />
                         {segments.map((seg, i) => (
-                          <circle key={i} cx="18" cy="18" r="15.915" fill="transparent" stroke={seg.color} strokeWidth="3.5" strokeDasharray={`${seg.pct} ${100 - seg.pct}`} strokeDashoffset={seg.offset} style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 0.5s' }} />
+                          <circle key={i} cx="18" cy="18" r="15.915" fill="transparent" stroke={seg.color} strokeWidth="3.5"
+                            strokeDasharray={`${seg.pct} ${100 - seg.pct}`} strokeDashoffset={seg.offset}
+                            style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 0.5s' }} />
                         ))}
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -385,20 +439,19 @@ export default function Dashboard({ session }: DashboardProps) {
         )}
       </main>
 
-      {/* Bottom Nav — mobile only */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex sm:hidden justify-around items-center px-4 pb-6 pt-3 rounded-t-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl" style={{ borderTop: '1px solid rgba(15,23,42,0.06)', boxShadow: '0 -8px 32px rgba(15,23,42,0.07)' }}>
+      {/* ── Bottom Nav (mobile only) ── */}
+      <nav className="fixed bottom-0 left-0 w-full z-50 flex sm:hidden justify-around items-center px-2 pb-6 pt-3 rounded-t-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl" style={{ borderTop: '1px solid rgba(15,23,42,0.06)', boxShadow: '0 -8px 32px rgba(15,23,42,0.07)' }}>
         <BottomNavItem to="/" active={location.pathname === '/'} icon={<LayoutGrid className="w-5 h-5" />} label="Home" />
         <BottomNavItem to="/extrato" active={location.pathname === '/extrato'} icon={<Receipt className="w-5 h-5" />} label="Extrato" />
         <BottomNavItem to="/cartoes" active={location.pathname === '/cartoes'} icon={<CreditCard className="w-5 h-5" />} label="Cartões" />
         <BottomNavItem to="/historico" active={location.pathname === '/historico'} icon={<TrendingUp className="w-5 h-5" />} label="Histórico" />
-        {/* ✅ Dark mode on mobile */}
-        <button onClick={toggleDarkMode} className="flex flex-col items-center justify-center px-4 py-2 gap-0.5 text-slate-500 dark:text-slate-400 transition-colors active:scale-90">
+        <button onClick={toggleDarkMode} className="flex flex-col items-center justify-center px-3 py-2 rounded-2xl gap-0.5 min-w-0 text-slate-500 dark:text-slate-400 transition-colors active:scale-90">
           {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-          <span className="text-[10px] font-semibold uppercase tracking-wider">Tema</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider leading-none">Tema</span>
         </button>
       </nav>
 
-      {editingTransaction && (<NewTransactionDialog transaction={editingTransaction} onEdit={handleEdit} trigger={<div />} />)}
+      {editingTransaction && <NewTransactionDialog transaction={editingTransaction} onEdit={handleEdit} trigger={<div />} />}
       <DeleteConfirmationDialog open={!!deletingTransaction} onOpenChange={open => !open && setDeletingTransaction(null)} transaction={deletingTransaction} onConfirm={handleDelete} />
       <DeleteConfirmationDialog open={showBulkDeleteConfirm} onOpenChange={open => !open && setShowBulkDeleteConfirm(false)} transaction={null} customMessage={`Excluir ${selectedIds.size} transação(ões)?`} onConfirm={handleBulkDelete} />
     </div>
