@@ -4,50 +4,27 @@ import { Transaction } from '@/types/financial';
 import { supabase, SupabaseTransaction } from '@/lib/supabase';
 import { NewTransactionDialog } from '@/components/financial/NewTransactionDialog';
 import { DeleteConfirmationDialog } from '@/components/financial/DeleteConfirmationDialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { Link, useLocation } from 'react-router-dom';
 import { useDarkMode } from '@/hooks/useDarkMode';
+import { cn } from '@/lib/utils';
+import { getTransactionStatus, getStatusLabel, getStatusBadgeVariant, getDaysOverdue } from '@/lib/financialUtils';
+import { toast } from 'sonner';
 import {
-  ArrowLeft, LogOut, Moon, Sun, Menu, CreditCard,
-  LayoutGrid, Receipt, TrendingUp, Search, X,
-  Download, SlidersHorizontal, Pencil, Trash2, Share2,
-  FileText, History,
+  Pencil, Trash2, LogOut, Moon, Sun, Search, X, Menu,
+  LayoutGrid, Receipt, CreditCard, TrendingUp, FileText, History,
+  Calculator,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
-import { getTransactionStatus } from '@/lib/financialUtils';
-
-// ─── Design tokens ─────────────────────────────────────────────────────────────
-const C = {
-  primary:            '#4F46E5',
-  primaryDark:        '#3730A3',
-  primaryBg:          '#EEF2FF',
-  tertiary:           '#10B981',
-  tertiaryFixed:      '#6FFBBE',
-  tertiaryDark:       '#059669',
-  error:              '#EF4444',
-  surface:            '#F8F9FF',
-  surfaceLowest:      '#FFFFFF',
-  surfaceLow:         '#EFF4FF',
-  surfaceMid:         '#E5EEFF',
-  secondaryContainer: '#D5E0F8',
-  onSurface:          '#0B1C30',
-  onSurfaceVariant:   '#464555',
-  neutral:            '#64748B',
-  outline:            '#777587',
-};
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
-const toMonthKey = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-
-const fmt = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(v));
-
 const fromSupabase = (row: SupabaseTransaction): Transaction => ({
   id: row.id, description: row.description, amount: row.amount,
   date: row.date, createdDate: row.created_date, dueDate: row.due_date,
@@ -56,7 +33,6 @@ const fromSupabase = (row: SupabaseTransaction): Transaction => ({
   type: row.type as Transaction['type'],
   isPaid: row.is_paid, recurringGroup: row.recurring_group ?? undefined,
 });
-
 const toSupabase = (t: Omit<Transaction, 'id'>, userId: string) => ({
   user_id: userId, description: t.description, amount: t.amount,
   date: t.date, created_date: t.createdDate, due_date: t.dueDate,
@@ -64,40 +40,30 @@ const toSupabase = (t: Omit<Transaction, 'id'>, userId: string) => ({
   is_paid: t.isPaid, recurring_group: (t as any).recurringGroup ?? null,
 });
 
-const categoryEmoji: Record<string, string> = {
-  'Contas': '🏠', 'Gastos Pessoais': '🛒', 'Compras': '🛍️',
-  'Pagamento de Dívidas': '💳', 'Salário': '💼', 'Freela': '💻', 'Extra': '⭐',
-  'Alimentação': '🍔', 'Transporte': '🚗', 'Lazer': '🎮',
-  'Viagem': '✈️', 'Educação': '🎓', 'Pet': '🐾', 'Saúde': '❤️',
+const MONTHS = [
+  { value: '01', label: 'Janeiro' }, { value: '02', label: 'Fevereiro' },
+  { value: '03', label: 'Março' },   { value: '04', label: 'Abril' },
+  { value: '05', label: 'Maio' },    { value: '06', label: 'Junho' },
+  { value: '07', label: 'Julho' },   { value: '08', label: 'Agosto' },
+  { value: '09', label: 'Setembro' },{ value: '10', label: 'Outubro' },
+  { value: '11', label: 'Novembro' },{ value: '12', label: 'Dezembro' },
+];
+const getYearOptions = () => {
+  const y = new Date().getFullYear();
+  return [y - 2, y - 1, y, y + 1].map(v => ({ value: String(v), label: String(v) }));
 };
 
-const getMonthOptions = (n = 6) => {
-  const months = [];
-  const today = new Date();
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-    months.push({
-      key: toMonthKey(d),
-      label: d.toLocaleDateString('pt-BR', { month: 'short' }),
-      full: d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
-    });
-  }
-  return months;
-};
+const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR');
 
 // ─── Bottom Nav Item ───────────────────────────────────────────────────────────
-const BottomNavItem = ({ icon, label, to, active }: {
-  icon: React.ReactNode; label: string; to: string; active?: boolean;
-}) => (
+const BottomNavItem = ({ icon, label, to, active }: { icon: React.ReactNode; label: string; to: string; active?: boolean }) => (
   <Link to={to}
-    className={cn(
-      'flex flex-col items-center justify-center px-4 py-2 rounded-2xl transition-all duration-200 active:scale-90 gap-0.5',
-      active ? 'text-[#4F46E5] dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400 hover:text-[#4F46E5]'
-    )}
-    style={active ? { background: C.surfaceLow } : {}}
-  >
+    className={cn('flex flex-col items-center justify-center px-3 py-2 rounded-2xl transition-all duration-200 active:scale-90 gap-0.5 min-w-0',
+      active ? 'text-indigo-600 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400')}
+    style={active ? { background: '#EFF4FF' } : {}}>
     {icon}
-    <span className="text-[10px] font-semibold uppercase tracking-wider">{label}</span>
+    <span className="text-[10px] font-semibold uppercase tracking-wider leading-none">{label}</span>
   </Link>
 );
 
@@ -106,24 +72,26 @@ interface StatementProps { session: Session; }
 
 export default function Statement({ session }: StatementProps) {
   const location = useLocation();
-  const { darkMode, toggleDarkMode } = useDarkMode(); // ✅ shared hook
+  const { darkMode, toggleDarkMode } = useDarkMode();
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
+  const [filterMonthNum, setFilterMonthNum] = useState('all');
+  const [filterYear, setFilterYear] = useState('all');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterType, setFilterType] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [selectedMonth, setSelectedMonth] = useState(toMonthKey(new Date()));
   const [editingTransaction, setEditingTransaction] = useState<Transaction | undefined>(undefined);
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
 
-  const monthOptions = getMonthOptions(6);
+  // ✅ Selection state for sum feature
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('transactions').select('*').order('due_date', { ascending: false });
+      const { data, error } = await supabase.from('transactions').select('*').order('due_date', { ascending: false });
       if (error) toast.error('Erro ao carregar transações');
       else setTransactions((data as SupabaseTransaction[]).map(fromSupabase));
       setLoading(false);
@@ -131,13 +99,14 @@ export default function Statement({ session }: StatementProps) {
     load();
   }, []);
 
+  // Clear selection when filters change
+  useEffect(() => { setSelectedIds(new Set()); }, [filterMonthNum, filterYear, filterCategory, filterType, filterStatus, search]);
+
   const handleAdd = async (newTx: Omit<Transaction, 'id'>[]) => {
     const rows = newTx.map(t => toSupabase(t, session.user.id));
     const { data, error } = await supabase.from('transactions').insert(rows).select();
     if (error) { toast.error('Erro ao adicionar'); return; }
-    const added = (data as SupabaseTransaction[]).map(fromSupabase);
-    setTransactions(prev => [...added, ...prev]);
-    toast.success(added.length > 1 ? `${added.length} criadas!` : 'Adicionada!');
+    setTransactions(prev => [...(data as SupabaseTransaction[]).map(fromSupabase), ...prev]);
   };
 
   const handleEdit = async (tx: Transaction) => {
@@ -145,7 +114,7 @@ export default function Statement({ session }: StatementProps) {
     if (error) { toast.error('Erro ao editar'); return; }
     setTransactions(prev => prev.map(t => t.id === tx.id ? tx : t));
     setEditingTransaction(undefined);
-    toast.success('Atualizada!');
+    toast.success('Transação atualizada!');
   };
 
   const handleDelete = async () => {
@@ -153,88 +122,65 @@ export default function Statement({ session }: StatementProps) {
     const { error } = await supabase.from('transactions').delete().eq('id', deletingTransaction.id);
     if (error) { toast.error('Erro'); return; }
     setTransactions(prev => prev.filter(t => t.id !== deletingTransaction.id));
+    setSelectedIds(prev => { const n = new Set(prev); n.delete(deletingTransaction.id); return n; });
     toast.success('Excluída!');
     setDeletingTransaction(null);
   };
 
-  // Monthly stats
-  const monthTx  = transactions.filter(t => t.dueDate.startsWith(selectedMonth));
-  const monthIn  = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const monthOut = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const netChange = monthIn - monthOut;
-  const prevTx    = transactions.filter(t => t.dueDate < selectedMonth);
-  const prevBal   = prevTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-                  - prevTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const endBal    = prevBal + netChange;
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  };
 
-  // Filtered list
-  const filtered = monthTx.filter(t => {
-    if (filterType === 'income'  && t.type !== 'income') return false;
-    if (filterType === 'expense' && t.type !== 'expense') return false;
-    if (filterStatus !== 'all' && getTransactionStatus(t) !== filterStatus) return false;
+  const filteredTransactions = transactions.filter(t => {
     if (search && !t.description.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterYear !== 'all' && !t.dueDate.startsWith(filterYear)) return false;
+    if (filterMonthNum !== 'all' && t.dueDate.slice(5, 7) !== filterMonthNum) return false;
+    if (filterCategory !== 'all' && t.category !== filterCategory) return false;
+    if (filterType !== 'all' && t.type !== filterType) return false;
+    if (filterStatus !== 'all' && getTransactionStatus(t) !== filterStatus) return false;
     return true;
   }).sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
 
-  // Group by date
-  const grouped: { date: string; label: string; items: Transaction[] }[] = [];
-  filtered.forEach(tx => {
-    const lbl = new Date(tx.dueDate + 'T12:00:00')
-      .toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
-      .toUpperCase();
-    const g = grouped.find(g => g.date === tx.dueDate);
-    if (g) g.items.push(tx);
-    else grouped.push({ date: tx.dueDate, label: lbl, items: [tx] });
-  });
+  const allCategories = Array.from(new Set(transactions.map(t => t.category)));
+  const hasActiveFilters = search || filterMonthNum !== 'all' || filterYear !== 'all' || filterCategory !== 'all' || filterType !== 'all' || filterStatus !== 'all';
 
-  // Export CSV
-  const handleExport = () => {
-    const rows = [
-      ['Data', 'Descrição', 'Categoria', 'Tipo', 'Valor', 'Status'],
-      ...filtered.map(t => [
-        t.dueDate, t.description, t.category,
-        t.type === 'income' ? 'Receita' : 'Despesa',
-        (t.type === 'expense' ? '-' : '') + t.amount.toFixed(2),
-        t.isPaid ? 'Pago' : getTransactionStatus(t),
-      ])
-    ];
-    const csv  = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = Object.assign(document.createElement('a'), { href: url, download: `extrato-${selectedMonth}.csv` });
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('CSV exportado!');
+  const clearAllFilters = () => {
+    setSearch(''); setFilterMonthNum('all'); setFilterYear('all');
+    setFilterCategory('all'); setFilterType('all'); setFilterStatus('all');
   };
 
-  const selMonth = monthOptions.find(m => m.key === selectedMonth);
+  // ✅ Selection sum calculations
+  const selectedTransactions = filteredTransactions.filter(t => selectedIds.has(t.id));
+  const selectionCount    = selectedTransactions.length;
+  const selectionIncome   = selectedTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const selectionExpense  = selectedTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const selectionNet      = selectionIncome - selectionExpense;
+  const hasSelection      = selectionCount > 0;
+
+  // Total summary (all filtered)
+  const totalIncome  = filteredTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const totalExpense = filteredTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const totalNet     = totalIncome - totalExpense;
+
+  const yearOptions = getYearOptions();
 
   return (
-    <div className="min-h-screen pb-20 sm:pb-0 bg-[#F8F9FF] dark:bg-slate-950">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 sm:pb-0">
 
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-[#F8F9FF]/90 dark:bg-slate-950/90 backdrop-blur-md"
-        style={{ borderBottom: '1px solid rgba(11,28,48,0.05)' }}>
-        <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/">
-              <button className="p-1 rounded-xl" style={{ color: C.primary }}>
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-            </Link>
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-sm"
-              style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})` }}>W</div>
-            <span className="font-bold hidden sm:block text-slate-900 dark:text-slate-100">WeekLeaks</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <NewTransactionDialog onAdd={handleAdd} trigger={
-              <Button size="sm" className="h-8 rounded-lg text-xs gap-1" style={{ background: C.primary }}>
-                + Nova
-              </Button>
-            } />
-
-            {/* Hamburger — desktop only */}
+      {/* ── Header ── */}
+      <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
+          <Link to="/" className="flex items-center gap-2 flex-shrink-0">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-sm bg-indigo-600">W</div>
+            <span className="font-bold text-base text-slate-900 dark:text-slate-100 tracking-tight hidden sm:block">WeekLeaks</span>
+          </Link>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500 dark:text-slate-400 hidden md:block truncate max-w-[160px]">{session.user.email}</span>
+            <NewTransactionDialog onAdd={handleAdd} />
             <div className="hidden sm:flex">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -243,33 +189,15 @@ export default function Statement({ session }: StatementProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuItem asChild>
-                    <Link to="/" className="flex items-center gap-2 cursor-pointer">
-                      <LayoutGrid className="w-4 h-4 text-slate-500" /> Dashboard
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/historico" className="flex items-center gap-2 cursor-pointer">
-                      <TrendingUp className="w-4 h-4 text-slate-500" /> Histórico
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/cartoes" className="flex items-center gap-2 cursor-pointer">
-                      <CreditCard className="w-4 h-4 text-slate-500" /> Cartões
-                    </Link>
-                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link to="/" className="flex items-center gap-2 cursor-pointer"><LayoutGrid className="w-4 h-4 text-slate-500" /> Dashboard</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link to="/historico" className="flex items-center gap-2 cursor-pointer"><History className="w-4 h-4 text-slate-500" /> Histórico</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link to="/cartoes" className="flex items-center gap-2 cursor-pointer"><CreditCard className="w-4 h-4 text-slate-500" /> Cartões</Link></DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleExport} className="flex items-center gap-2 cursor-pointer">
-                    <Download className="w-4 h-4 text-slate-500" /> Exportar CSV
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {/* ✅ Dark mode toggle */}
                   <DropdownMenuItem onClick={toggleDarkMode} className="flex items-center gap-2 cursor-pointer">
                     {darkMode ? <Sun className="w-4 h-4 text-slate-500" /> : <Moon className="w-4 h-4 text-slate-500" />}
                     {darkMode ? 'Modo claro' : 'Modo escuro'}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => supabase.auth.signOut()}
-                    className="flex items-center gap-2 cursor-pointer text-rose-600 dark:text-rose-400">
+                  <DropdownMenuItem onClick={() => supabase.auth.signOut()} className="flex items-center gap-2 cursor-pointer text-rose-600 dark:text-rose-400">
                     <LogOut className="w-4 h-4" /> Sair
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -279,252 +207,294 @@ export default function Statement({ session }: StatementProps) {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-4 space-y-5">
+      <main className="max-w-6xl mx-auto px-3 sm:px-6 py-6 space-y-5">
 
-        {/* ── Month chips ── */}
-        <div className="overflow-x-auto no-scrollbar py-1">
-          <div className="flex gap-2 whitespace-nowrap">
-            {monthOptions.map(m => (
-              <button key={m.key} onClick={() => setSelectedMonth(m.key)}
-                className="px-5 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 capitalize"
-                style={selectedMonth === m.key
-                  ? { background: C.primary, color: '#fff', boxShadow: `0 8px 20px ${C.primary}30` }
-                  : { background: C.surfaceLow, color: C.onSurfaceVariant }
-                }>
-                {m.label}
-              </button>
-            ))}
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Extrato</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Todas as suas transações</p>
+        </div>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input placeholder="Buscar por descrição..." value={search} onChange={e => setSearch(e.target.value)}
+            className="pl-9 pr-9 h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100" />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Filters */}
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Mês</label>
+            <Select value={filterMonthNum} onValueChange={setFilterMonthNum}>
+              <SelectTrigger className="h-9 text-sm rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {MONTHS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Ano</label>
+            <Select value={filterYear} onValueChange={setFilterYear}>
+              <SelectTrigger className="h-9 text-sm rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {yearOptions.map(y => <SelectItem key={y.value} value={y.value}>{y.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Categoria</label>
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="h-9 text-sm rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"><SelectValue placeholder="Todas" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {allCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Tipo</label>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="h-9 text-sm rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="income">Receita</SelectItem>
+                <SelectItem value="expense">Despesa</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Status</label>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="h-9 text-sm rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="paid">🟢 Quitado</SelectItem>
+                <SelectItem value="pending">🟡 Pendente</SelectItem>
+                <SelectItem value="overdue">🔴 Atrasado</SelectItem>
+                <SelectItem value="future">🔵 Futuro</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-end">
+            <Button variant="outline" onClick={clearAllFilters}
+              className={cn('w-full h-9 text-sm rounded-lg text-slate-700 dark:text-slate-300', hasActiveFilters && 'border-violet-400 text-violet-600 dark:border-violet-600 dark:text-violet-400')}>
+              {hasActiveFilters ? <><X className="w-3.5 h-3.5 mr-1.5" />Limpar</> : 'Limpar filtros'}
+            </Button>
           </div>
         </div>
 
-        {/* ── Statement summary card ── */}
-        <div className="relative overflow-hidden rounded-[1.5rem] p-6 text-white"
-          style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`, boxShadow: `0 20px 40px ${C.primary}25` }}>
-          <div className="absolute -right-12 -bottom-12 w-48 h-48 rounded-full opacity-10"
-            style={{ background: 'white', filter: 'blur(40px)' }} />
-          <div className="relative z-10 space-y-5">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-widest opacity-70 mb-1">Período do Extrato</p>
-                <h2 className="text-2xl font-extrabold capitalize">{selMonth?.full ?? selectedMonth}</h2>
-              </div>
-              <div className="p-2.5 rounded-xl" style={{ background: 'rgba(255,255,255,0.18)' }}>
-                <Receipt className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs opacity-70 mb-0.5">Saldo Inicial</p>
-                <p className="text-lg font-bold">{fmt(prevBal)}</p>
-              </div>
-              <div>
-                <p className="text-xs opacity-70 mb-0.5">Saldo Final</p>
-                <p className="text-lg font-bold">{fmt(endBal)}</p>
-              </div>
-            </div>
-            <div className="flex items-center justify-between pt-4"
-              style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
-              <div>
-                <p className="text-xs opacity-70 mb-0.5">Variação Líquida</p>
-                <div className="flex items-center gap-1.5">
-                  <span style={{ color: netChange >= 0 ? C.tertiaryFixed : '#FCA5A5' }}>
-                    {netChange >= 0 ? '↑' : '↓'}
-                  </span>
-                  <span className="font-bold" style={{ color: netChange >= 0 ? C.tertiaryFixed : '#FCA5A5' }}>
-                    {netChange >= 0 ? '+' : '−'}{fmt(netChange)}
-                  </span>
-                </div>
-              </div>
-              <button onClick={handleExport}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all hover:opacity-90 active:scale-95"
-                style={{ background: 'white', color: C.primary }}>
-                <Download className="w-4 h-4" /> CSV
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Search + filter ── */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl"
-            style={{ background: C.surfaceLow }}>
-            <Search className="w-4 h-4 flex-shrink-0" style={{ color: C.outline }} />
-            <input
-              className="bg-transparent border-none p-0 text-sm outline-none w-full text-slate-900 dark:text-slate-100"
-              placeholder="Buscar transações..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-            {search && (
-              <button onClick={() => setSearch('')} style={{ color: C.outline }}>
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="p-3 rounded-xl" style={{ background: C.surfaceLow, color: C.onSurfaceVariant }}>
-                <SlidersHorizontal className="w-5 h-5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              {(['all', 'income', 'expense'] as const).map(v => (
-                <DropdownMenuItem key={v} onClick={() => setFilterType(v)}
-                  className={cn('cursor-pointer', filterType === v && 'font-bold')}>
-                  {filterType === v ? '● ' : ''}{v === 'all' ? 'Todos' : v === 'income' ? 'Receitas' : 'Despesas'}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              {[['all', 'Qualquer status'], ['paid', '🟢 Pago'], ['pending', '🟡 Pendente'], ['overdue', '🔴 Atrasado'], ['future', '🔵 Futuro']].map(([v, l]) => (
-                <DropdownMenuItem key={v} onClick={() => setFilterStatus(v)}
-                  className={cn('cursor-pointer', filterStatus === v && 'font-bold')}>
-                  {filterStatus === v ? '● ' : ''}{l}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        {(search || filterType !== 'all' || filterStatus !== 'all') && (
-          <p className="text-xs px-1 text-slate-500">
-            {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
-            {search && <span style={{ color: C.primary }}> · "{search}"</span>}
+        {hasActiveFilters && (
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {filteredTransactions.length} resultado{filteredTransactions.length !== 1 ? 's' : ''}
+            {search && <span className="font-medium text-violet-600 dark:text-violet-400"> para "{search}"</span>}
           </p>
         )}
 
-        {/* ── Transaction list ── */}
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 rounded-full border-2 animate-spin"
-              style={{ borderColor: C.primary, borderTopColor: 'transparent' }} />
+          <div className="flex items-center justify-center py-24">
+            <div className="w-8 h-8 rounded-full border-2 border-violet-600 border-t-transparent animate-spin" />
           </div>
         ) : (
-          <div className="space-y-6 pb-4">
-            {grouped.length === 0 ? (
-              <div className="text-center py-16 rounded-[1.5rem] bg-white dark:bg-slate-900">
-                <p className="text-slate-500 dark:text-slate-400">
-                  {search ? `Nenhum resultado para "${search}"` : 'Nenhuma transação neste mês'}
-                </p>
-              </div>
-            ) : (
-              grouped.map(group => (
-                <div key={group.date} className="space-y-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider px-1"
-                    style={{ color: C.onSurfaceVariant }}>
-                    {group.label}
-                  </h3>
-                  <div className="space-y-2">
-                    {group.items.map(tx => {
-                      const isIncome = tx.type === 'income';
-                      const emoji = categoryEmoji[tx.category] || '📌';
-                      const status = getTransactionStatus(tx);
-                      const iconBg = isIncome ? '#D1FAE5' : C.secondaryContainer;
+          <>
+            {/* ✅ Selection hint — shows when no selection yet */}
+            {!hasSelection && filteredTransactions.length > 0 && (
+              <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                <Calculator className="w-3.5 h-3.5" />
+                Clique em transações para somá-las
+              </p>
+            )}
 
-                      return (
-                        <div key={tx.id}
-                          className="group flex items-center justify-between p-4 rounded-2xl transition-all cursor-pointer bg-white dark:bg-slate-900 hover:bg-[#EFF4FF] dark:hover:bg-slate-800"
-                          style={{ boxShadow: '0 4px 20px rgba(11,28,48,0.02)' }}>
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform"
-                              style={{ background: iconBg }}>
-                              {emoji}
-                            </div>
-                            <div>
-                              <p className="font-semibold text-sm text-slate-900 dark:text-slate-100">
-                                {tx.description}
-                              </p>
-                              <p className="text-xs mt-0.5 text-slate-500 dark:text-slate-400">
-                                {tx.category}
-                              </p>
-                            </div>
+            {/* Table */}
+            <div className="border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-slate-200 dark:border-slate-800 hover:bg-transparent">
+                    {/* ✅ Checkbox column header */}
+                    <TableHead className="w-10 pl-4">
+                      <input type="checkbox"
+                        checked={filteredTransactions.length > 0 && selectedIds.size === filteredTransactions.length}
+                        onChange={() => {
+                          if (selectedIds.size === filteredTransactions.length) setSelectedIds(new Set());
+                          else setSelectedIds(new Set(filteredTransactions.map(t => t.id)));
+                        }}
+                        className="w-3.5 h-3.5 cursor-pointer accent-violet-600"
+                      />
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold text-slate-500 dark:text-slate-400">Vencimento</TableHead>
+                    <TableHead className="text-xs font-semibold text-slate-500 dark:text-slate-400">Descrição</TableHead>
+                    <TableHead className="text-xs font-semibold text-slate-500 dark:text-slate-400 hidden sm:table-cell">Categoria</TableHead>
+                    <TableHead className="text-xs font-semibold text-slate-500 dark:text-slate-400 hidden md:table-cell">Tipo</TableHead>
+                    <TableHead className="text-xs font-semibold text-slate-500 dark:text-slate-400 text-right">Valor</TableHead>
+                    <TableHead className="text-xs font-semibold text-slate-500 dark:text-slate-400 text-right">Status</TableHead>
+                    <TableHead className="text-xs font-semibold text-slate-500 dark:text-slate-400 text-right hidden lg:table-cell">Quitação</TableHead>
+                    <TableHead className="text-xs font-semibold text-slate-500 dark:text-slate-400 text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTransactions.length > 0 ? filteredTransactions.map(tx => {
+                    const status = getTransactionStatus(tx);
+                    const daysOverdue = getDaysOverdue(tx);
+                    const isSelected = selectedIds.has(tx.id);
+                    return (
+                      <TableRow key={tx.id}
+                        onClick={() => toggleSelect(tx.id)}
+                        className={cn(
+                          'border-slate-100 dark:border-slate-800/60 cursor-pointer transition-colors',
+                          // ✅ Fix: proper dark mode colors on selected/overdue rows
+                          isSelected
+                            ? 'bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-950/60'
+                            : status === 'overdue'
+                              ? 'bg-rose-50/50 dark:bg-rose-950/10 hover:bg-rose-50 dark:hover:bg-rose-950/20'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                        )}>
+                        {/* Checkbox */}
+                        <TableCell className="pl-4 w-10" onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(tx.id)}
+                            className="w-3.5 h-3.5 cursor-pointer accent-violet-600" />
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-600 dark:text-slate-300">
+                          <div>{fmtDate(tx.dueDate)}</div>
+                          {daysOverdue > 0 && <div className="text-xs text-rose-600 dark:text-rose-400 font-medium">{daysOverdue}d atraso</div>}
+                        </TableCell>
+                        {/* ✅ Fix: dark:text-slate-100 ensures description is visible in dark mode */}
+                        <TableCell className="font-medium text-sm text-slate-900 dark:text-slate-100">
+                          <div className="flex items-center gap-1">
+                            {search ? (
+                              <span dangerouslySetInnerHTML={{
+                                __html: tx.description.replace(
+                                  new RegExp(`(${search})`, 'gi'),
+                                  '<mark class="bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300 rounded px-0.5">$1</mark>'
+                                )
+                              }} />
+                            ) : tx.description}
+                            {(tx as any).recurringGroup && (
+                              <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-800 dark:text-slate-500 px-1 rounded" title="Recorrente">↺</span>
+                            )}
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="text-right">
-                              <p className="font-bold text-sm"
-                                style={{ color: isIncome ? C.tertiaryDark : C.onSurface }}>
-                                {isIncome ? '+' : '−'}{fmt(tx.amount)}
-                              </p>
-                              <p className="text-[10px] font-bold uppercase tracking-wider mt-0.5"
-                                style={{ color: C.outline }}>
-                                {tx.isPaid ? 'Pago' : status === 'overdue' ? 'Atrasado' : status === 'future' ? 'Futuro' : 'Pendente'}
-                              </p>
-                            </div>
-                            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={e => { e.stopPropagation(); setEditingTransaction(tx); }}
-                                className="w-7 h-7 rounded-xl flex items-center justify-center"
-                                style={{ color: C.neutral }}>
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button onClick={e => { e.stopPropagation(); setDeletingTransaction(tx); }}
-                                className="w-7 h-7 rounded-xl flex items-center justify-center"
-                                style={{ color: C.error }}>
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <Badge variant="outline" className="text-xs text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700">{tx.category}</Badge>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <Badge className={cn('text-xs', tx.type === 'income'
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-0'
+                            : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400 border-0')}>
+                            {tx.type === 'income' ? 'Receita' : 'Despesa'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className={cn('text-right font-bold text-sm',
+                          tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                          {tx.type === 'income' ? '+' : '−'}{fmt(tx.amount)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant={getStatusBadgeVariant(status)} className="text-xs">{getStatusLabel(status)}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-slate-400 dark:text-slate-500 hidden lg:table-cell">
+                          {tx.paidDate ? fmtDate(tx.paidDate) : '—'}
+                        </TableCell>
+                        <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => setEditingTransaction(tx)}
+                              className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setDeletingTransaction(tx)}
+                              className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
                           </div>
-                        </div>
-                      );
-                    })}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }) : (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center text-slate-400 dark:text-slate-500 py-12 text-sm">
+                        {hasActiveFilters ? 'Nenhuma transação encontrada com esses filtros' : 'Nenhuma transação ainda'}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* ✅ Selection sum bar — slides in when items are selected */}
+            {hasSelection && (
+              <div className="rounded-2xl border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50 dark:bg-indigo-950/40 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all">
+                <div className="flex items-center gap-2">
+                  <Calculator className="w-4 h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
+                  <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+                    {selectionCount} selecionada{selectionCount !== 1 ? 's' : ''}
+                  </span>
+                  <button onClick={() => setSelectedIds(new Set())}
+                    className="text-xs text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200 underline ml-1">
+                    limpar
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 sm:gap-5">
+                  {selectionIncome > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Receitas:</span>
+                      <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">+{fmt(selectionIncome)}</span>
+                    </div>
+                  )}
+                  {selectionExpense > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Despesas:</span>
+                      <span className="text-sm font-bold text-rose-600 dark:text-rose-400">−{fmt(selectionExpense)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 pl-3 border-l border-indigo-200 dark:border-indigo-700">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">Saldo:</span>
+                    <span className={cn('text-sm font-bold', selectionNet >= 0 ? 'text-indigo-600 dark:text-indigo-300' : 'text-rose-600 dark:text-rose-400')}>
+                      {selectionNet >= 0 ? '+' : '−'}{fmt(selectionNet)}
+                    </span>
                   </div>
                 </div>
-              ))
-            )}
-
-            {/* Summary footer */}
-            {filtered.length > 0 && (
-              <div className="grid grid-cols-3 gap-3 pt-2">
-                {[
-                  { label: 'Receitas', val: filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0), color: C.tertiary },
-                  { label: 'Despesas', val: filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0), color: C.error },
-                  { label: 'Saldo', val: filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0) - filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0), color: C.primary },
-                ].map(({ label, val, color }) => (
-                  <div key={label} className="rounded-2xl p-4 text-center bg-white dark:bg-slate-900"
-                    style={{ boxShadow: '0 4px 16px rgba(11,28,48,0.03)' }}>
-                    <p className="text-xs mb-1 text-slate-500 dark:text-slate-400">{label}</p>
-                    <p className="text-sm font-bold" style={{ color }}>{fmt(val)}</p>
-                  </div>
-                ))}
               </div>
             )}
-          </div>
+
+            {/* Summary footer (all filtered) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-4 border border-emerald-200 dark:border-emerald-800/50 rounded-xl bg-emerald-50 dark:bg-emerald-950/30">
+                <p className="text-xs text-emerald-700 dark:text-emerald-400 mb-1">Total Receitas</p>
+                <p className="text-xl font-bold text-emerald-800 dark:text-emerald-300">{fmt(totalIncome)}</p>
+              </div>
+              <div className="p-4 border border-rose-200 dark:border-rose-800/50 rounded-xl bg-rose-50 dark:bg-rose-950/30">
+                <p className="text-xs text-rose-700 dark:text-rose-400 mb-1">Total Despesas</p>
+                <p className="text-xl font-bold text-rose-800 dark:text-rose-300">{fmt(totalExpense)}</p>
+              </div>
+              <div className="p-4 border border-violet-200 dark:border-violet-800/50 rounded-xl bg-violet-50 dark:bg-violet-950/30">
+                <p className="text-xs text-violet-700 dark:text-violet-400 mb-1">Saldo</p>
+                <p className="text-xl font-bold text-violet-800 dark:text-violet-300">{totalNet >= 0 ? '' : '−'}{fmt(totalNet)}</p>
+              </div>
+            </div>
+          </>
         )}
       </main>
 
-      {/* ── Floating export button (mobile only) ── */}
-      <div className="fixed bottom-24 right-5 z-50 sm:hidden">
-        <button onClick={handleExport}
-          className="flex items-center gap-2 px-4 py-3.5 rounded-2xl font-bold text-sm text-white active:scale-95 transition-all"
-          style={{ background: C.primary, boxShadow: `0 16px 32px ${C.primary}40` }}>
-          <Share2 className="w-4 h-4" /> Exportar
-        </button>
-      </div>
-
       {/* ── Bottom Nav (mobile only) ── */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex sm:hidden justify-around items-center px-4 pb-6 pt-3 rounded-t-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl"
-        style={{ borderTop: '1px solid rgba(11,28,48,0.05)', boxShadow: '0 -8px 32px rgba(15,23,42,0.06)' }}>
+      <nav className="fixed bottom-0 left-0 w-full z-50 flex sm:hidden justify-around items-center px-2 pb-6 pt-3 rounded-t-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl"
+        style={{ borderTop: '1px solid rgba(15,23,42,0.06)', boxShadow: '0 -8px 32px rgba(15,23,42,0.07)' }}>
         <BottomNavItem to="/" icon={<LayoutGrid className="w-5 h-5" />} label="Home" />
         <BottomNavItem to="/extrato" active={location.pathname === '/extrato'} icon={<Receipt className="w-5 h-5" />} label="Extrato" />
         <BottomNavItem to="/cartoes" icon={<CreditCard className="w-5 h-5" />} label="Cartões" />
         <BottomNavItem to="/historico" icon={<TrendingUp className="w-5 h-5" />} label="Histórico" />
-        {/* ✅ Dark mode on mobile bottom nav */}
         <button onClick={toggleDarkMode}
-          className="flex flex-col items-center justify-center px-4 py-2 gap-0.5 text-slate-500 dark:text-slate-400 transition-colors active:scale-90">
+          className="flex flex-col items-center justify-center px-3 py-2 rounded-2xl gap-0.5 min-w-0 text-slate-500 dark:text-slate-400 active:scale-90">
           {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-          <span className="text-[10px] font-semibold uppercase tracking-wider">Tema</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider leading-none">Tema</span>
         </button>
       </nav>
 
-      {/* Dialogs */}
-      {editingTransaction && (
-        <NewTransactionDialog transaction={editingTransaction} onEdit={handleEdit} trigger={<div />} />
-      )}
-      <DeleteConfirmationDialog
-        open={!!deletingTransaction}
-        onOpenChange={open => !open && setDeletingTransaction(null)}
-        transaction={deletingTransaction}
-        onConfirm={handleDelete}
-      />
+      {editingTransaction && <NewTransactionDialog transaction={editingTransaction} onEdit={handleEdit} trigger={<div />} />}
+      <DeleteConfirmationDialog open={!!deletingTransaction} onOpenChange={open => !open && setDeletingTransaction(null)} transaction={deletingTransaction} onConfirm={handleDelete} />
     </div>
   );
 }
