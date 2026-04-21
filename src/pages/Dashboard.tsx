@@ -227,7 +227,7 @@ export default function Dashboard({ session }: DashboardProps) {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 sm:pb-0">
 
       {/* ── Header ── */}
-      <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+      <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 back-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
           <Link to="/" className="flex items-center gap-2.5 flex-shrink-0">
             <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-sm" style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})` }}>W</div>
@@ -248,6 +248,11 @@ export default function Dashboard({ session }: DashboardProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem asChild>
+                    <Link to="/conta" className="flex items-center gap-2 cursor-pointer">
+                    <User className="w-4 h-4 text-slate-500" /> Minha Conta
+                      </Link>
+                    </DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/extrato" className="flex items-center gap-2 cursor-pointer"><FileText className="w-4 h-4 text-slate-500" /> Extrato</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/historico" className="flex items-center gap-2 cursor-pointer"><History className="w-4 h-4 text-slate-500" /> Histórico</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/cartoes" className="flex items-center gap-2 cursor-pointer"><CreditCard className="w-4 h-4 text-slate-500" /> Cartões</Link></DropdownMenuItem>
