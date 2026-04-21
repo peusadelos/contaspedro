@@ -12,6 +12,7 @@ import BalanceHistory from './pages/BalanceHistory';
 import CreditCards from './pages/CreditCards';
 import Auth from './pages/Auth';
 import NotFound from './pages/NotFound';
+import Account from './pages/Account';
 
 const queryClient = new QueryClient();
 
@@ -45,6 +46,7 @@ const App = () => {
             <Route path="/historico" element={session ? <BalanceHistory session={session} /> : <Navigate to="/auth" replace />} />
             <Route path="/cartoes" element={session ? <CreditCards session={session} /> : <Navigate to="/auth" replace />} />
             <Route path="*" element={<NotFound />} />
+            <Route path="/conta" element={session ? <Account session={session} /> : <Navigate to="/auth" replace />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
