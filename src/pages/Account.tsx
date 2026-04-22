@@ -5,7 +5,7 @@ import { useDarkMode } from '@/hooks/useDarkMode';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  User, Mail, Lock, LogOut, Trash2, Moon, Sun,
+  User as UserIcon, Mail, Lock, LogOut, Trash2, Moon, Sun,
   LayoutGrid, Receipt, CreditCard, TrendingUp,
   Shield, ChevronRight, Eye, EyeOff, Calendar,
   Menu, Check, X, AlertTriangle,
@@ -22,20 +22,17 @@ import {
   DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-
 // ── Constants ────────────────────────────────────────────────────────────────
 const C = {
   primary: '#4F46E5',
   primaryDark: '#3730A3',
   primaryLight: '#818CF8',
 };
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const formatDate = (dateStr: string) =>
   new Date(dateStr).toLocaleDateString('pt-BR', {
     day: '2-digit', month: 'long', year: 'numeric',
   });
-
 // ── Sub-components ───────────────────────────────────────────────────────────
 const BottomNavItem = ({
   icon, label, to, active,
@@ -61,7 +58,6 @@ const BottomNavItem = ({
     </span>
   </Link>
 );
-
 const SectionCard = ({
   children, className,
 }: {
@@ -77,7 +73,6 @@ const SectionCard = ({
     {children}
   </div>
 );
-
 const SectionTitle = ({
   icon, title,
 }: {
@@ -91,15 +86,12 @@ const SectionTitle = ({
     <h2 className="text-sm font-bold text-foreground tracking-tight">{title}</h2>
   </div>
 );
-
 // ── Main Component ────────────────────────────────────────────────────────────
 interface AccountProps { session: Session; }
-
 export default function Account({ session }: AccountProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { darkMode, toggleDarkMode } = useDarkMode();
-
   // ── Profile state ──────────────────────────────────────────────────────────
   const [displayName, setDisplayName] = useState(
     session.user.user_metadata?.full_name ?? '',
@@ -107,7 +99,6 @@ export default function Account({ session }: AccountProps) {
   const [editingName, setEditingName]   = useState(false);
   const [nameInput, setNameInput]       = useState(displayName);
   const [savingName, setSavingName]     = useState(false);
-
   // ── Password state ─────────────────────────────────────────────────────────
   const [currentPassword, setCurrentPassword]   = useState('');
   const [newPassword, setNewPassword]           = useState('');
@@ -116,22 +107,18 @@ export default function Account({ session }: AccountProps) {
   const [showNew, setShowNew]                   = useState(false);
   const [showConfirm, setShowConfirm]           = useState(false);
   const [savingPassword, setSavingPassword]     = useState(false);
-
   // ── Delete account dialog ──────────────────────────────────────────────────
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting]                 = useState(false);
-
   // ── Logout dialog ──────────────────────────────────────────────────────────
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
-
   // ── Sync name from metadata ────────────────────────────────────────────────
   useEffect(() => {
     const name = session.user.user_metadata?.full_name ?? '';
     setDisplayName(name);
     setNameInput(name);
   }, [session]);
-
   // ── Password strength ──────────────────────────────────────────────────────
   const getPasswordStrength = (pwd: string) => {
     if (!pwd) return { score: 0, label: '', color: '' };
@@ -150,9 +137,7 @@ export default function Account({ session }: AccountProps) {
     return { score, ...map[score] };
   };
   const strength = getPasswordStrength(newPassword);
-
   // ── Handlers ──────────────────────────────────────────────────────────────
-
   // Save display name
   const handleSaveName = async () => {
     if (!nameInput.trim()) return;
@@ -169,7 +154,6 @@ export default function Account({ session }: AccountProps) {
     }
     setSavingName(false);
   };
-
   // Change password
   const handleChangePassword = async () => {
     if (!newPassword || !confirmPassword) {
@@ -185,7 +169,6 @@ export default function Account({ session }: AccountProps) {
       return;
     }
     setSavingPassword(true);
-
     // Re-authenticate with current password first
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email: session.user.email!,
@@ -196,7 +179,6 @@ export default function Account({ session }: AccountProps) {
       setSavingPassword(false);
       return;
     }
-
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) {
       toast.error('Erro ao atualizar senha');
@@ -208,13 +190,11 @@ export default function Account({ session }: AccountProps) {
     }
     setSavingPassword(false);
   };
-
   // Logout
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate('/auth');
   };
-
   // Delete account
   const handleDeleteAccount = async () => {
     if (deleteConfirmText !== 'EXCLUIR') return;
@@ -230,24 +210,19 @@ export default function Account({ session }: AccountProps) {
     navigate('/auth');
     setDeleting(false);
   };
-
   // ── Derived ────────────────────────────────────────────────────────────────
   const avatarInitials = displayName
     ? displayName.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()
     : session.user.email?.[0].toUpperCase() ?? 'U';
-
   const memberSince = session.user.created_at
     ? formatDate(session.user.created_at)
     : '—';
-
   const lastSignIn = session.user.last_sign_in_at
     ? formatDate(session.user.last_sign_in_at)
     : '—';
-
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 sm:pb-0">
-
       {/* ── Header ── */}
       <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
@@ -262,7 +237,6 @@ export default function Account({ session }: AccountProps) {
               WeekLeaks
             </span>
           </Link>
-
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-slate-500 dark:text-slate-400 hidden md:block truncate max-w-[160px]">
               {session.user.email}
@@ -305,9 +279,7 @@ export default function Account({ session }: AccountProps) {
           </div>
         </div>
       </header>
-
       <main className="max-w-2xl mx-auto px-3 sm:px-6 py-6 space-y-5">
-
         {/* ── Hero / Avatar Card ── */}
         <div
           className="rounded-2xl p-6 text-white relative overflow-hidden"
@@ -321,7 +293,6 @@ export default function Account({ session }: AccountProps) {
             style={{ background: 'white', filter: 'blur(32px)' }} />
           <div className="absolute -bottom-8 -left-8 w-36 h-36 rounded-full opacity-10"
             style={{ background: C.primaryLight, filter: 'blur(28px)' }} />
-
           <div className="relative z-10 flex items-center gap-4">
             {/* Avatar */}
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold flex-shrink-0"
@@ -338,7 +309,6 @@ export default function Account({ session }: AccountProps) {
               <p className="text-sm opacity-70 truncate">{session.user.email}</p>
             </div>
           </div>
-
           {/* Meta info */}
           <div className="relative z-10 mt-5 flex flex-wrap gap-3">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs"
@@ -355,11 +325,9 @@ export default function Account({ session }: AccountProps) {
             </div>
           </div>
         </div>
-
         {/* ── Profile Info ── */}
         <SectionCard>
-          <SectionTitle icon={<User className="w-4 h-4" />} title="Informações do Perfil" />
-
+          <SectionTitle icon={<UserIcon className="w-4 h-4" />} title="Informações do Perfil" />
           {/* Email (read-only) */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
@@ -373,7 +341,6 @@ export default function Account({ session }: AccountProps) {
               </span>
             </div>
           </div>
-
           {/* Display name */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
@@ -416,7 +383,7 @@ export default function Account({ session }: AccountProps) {
                 onClick={() => setEditingName(true)}
                 className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-border hover:border-violet-400 dark:hover:border-violet-600 transition-colors group text-left"
               >
-                <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <UserIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 <span className={cn(
                   'text-sm flex-1',
                   displayName ? 'text-foreground' : 'text-muted-foreground italic',
@@ -428,11 +395,9 @@ export default function Account({ session }: AccountProps) {
             )}
           </div>
         </SectionCard>
-
         {/* ── Change Password ── */}
         <SectionCard>
           <SectionTitle icon={<Lock className="w-4 h-4" />} title="Alterar Senha" />
-
           {/* Current password */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
@@ -455,7 +420,6 @@ export default function Account({ session }: AccountProps) {
               </button>
             </div>
           </div>
-
           {/* New password */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
@@ -477,7 +441,6 @@ export default function Account({ session }: AccountProps) {
                 {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-
             {/* Password strength meter */}
             {newPassword && (
               <div className="space-y-1.5 pt-1">
@@ -498,7 +461,6 @@ export default function Account({ session }: AccountProps) {
               </div>
             )}
           </div>
-
           {/* Confirm password */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
@@ -532,7 +494,6 @@ export default function Account({ session }: AccountProps) {
               </p>
             )}
           </div>
-
           <Button
             onClick={handleChangePassword}
             disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword}
@@ -543,7 +504,6 @@ export default function Account({ session }: AccountProps) {
               : 'Atualizar Senha'}
           </Button>
         </SectionCard>
-
         {/* ── Preferences ── */}
         <SectionCard>
           <SectionTitle icon={<Sun className="w-4 h-4" />} title="Preferências" />
@@ -576,11 +536,9 @@ export default function Account({ session }: AccountProps) {
             </div>
           </button>
         </SectionCard>
-
         {/* ── Danger Zone ── */}
         <SectionCard className="border-rose-200 dark:border-rose-900/50">
           <SectionTitle icon={<AlertTriangle className="w-4 h-4" />} title="Zona de Perigo" />
-
           {/* Logout */}
           <button
             onClick={() => setLogoutDialogOpen(true)}
@@ -597,7 +555,6 @@ export default function Account({ session }: AccountProps) {
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-rose-500 transition-colors" />
           </button>
-
           {/* Delete account */}
           <button
             onClick={() => setDeleteDialogOpen(true)}
@@ -617,13 +574,11 @@ export default function Account({ session }: AccountProps) {
             <ChevronRight className="w-4 h-4 text-rose-400" />
           </button>
         </SectionCard>
-
         {/* Version tag */}
         <p className="text-center text-xs text-muted-foreground pb-2">
           WeekLeaks · v1.0.0
         </p>
       </main>
-
       {/* ── Bottom Nav (mobile) ── */}
       <nav
         className="fixed bottom-0 left-0 w-full z-50 flex sm:hidden justify-around items-center px-2 pb-6 pt-3 rounded-t-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl"
@@ -644,7 +599,6 @@ export default function Account({ session }: AccountProps) {
           <span className="text-[10px] font-semibold uppercase tracking-wider leading-none">Tema</span>
         </button>
       </nav>
-
       {/* ── Logout Dialog ── */}
       <Dialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
         <DialogContent className="rounded-2xl max-w-sm">
@@ -669,7 +623,6 @@ export default function Account({ session }: AccountProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* ── Delete Account Dialog ── */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="rounded-2xl max-w-sm">
