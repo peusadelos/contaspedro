@@ -14,7 +14,7 @@ import {
   ChevronLeft, ChevronRight, CreditCard, LayoutGrid,
   Receipt, LogOut, Moon, Sun, Menu, FileText,
   History, AlertTriangle, ChevronRight as ChevronRightIcon,
-  Trash2, ArrowDownCircle, ArrowUpCircle,
+  Trash2, ArrowDownCircle, ArrowUpCircle, User as UserIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,13 +23,11 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-
 const C = {
   primary: '#4F46E5', primaryDark: '#3730A3', primaryLight: '#818CF8',
   tertiary: '#10B981', error: '#EF4444',
   surfaceLow: '#EFF4FF', onSurface: '#0F172A', onSurfaceVariant: '#475569', neutral: '#64748B',
 };
-
 const toMonthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const formatMonthLabel = (key: string) => {
   const [y, m] = key.split('-');
@@ -37,7 +35,6 @@ const formatMonthLabel = (key: string) => {
 };
 const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(v));
 const fmtCompact = (v: number) => new Intl.NumberFormat('pt-BR', { notation: 'compact', style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).format(v);
-
 const fromSupabase = (row: SupabaseTransaction): Transaction => ({
   id: row.id, description: row.description, amount: row.amount,
   date: row.date, createdDate: row.created_date, dueDate: row.due_date,
@@ -52,21 +49,18 @@ const toSupabase = (t: Omit<Transaction, 'id'>, userId: string) => ({
   paid_date: t.paidDate ?? null, category: t.category, type: t.type,
   is_paid: t.isPaid, recurring_group: (t as any).recurringGroup ?? null,
 });
-
 const categoryEmoji: Record<string, string> = {
   'Contas': '🏠', 'Gastos Pessoais': '🛒', 'Compras': '🛍️',
   'Pagamento de Dívidas': '💳', 'Salário': '💼', 'Freela': '💻', 'Extra': '⭐',
   'Alimentação': '🍔', 'Transporte': '🚗', 'Lazer': '🎮',
   'Viagem': '✈️', 'Educação': '🎓', 'Pet': '🐾', 'Saúde': '❤️',
 };
-
 const BottomNavItem = ({ icon, label, to, active }: { icon: React.ReactNode; label: string; to: string; active?: boolean }) => (
   <Link to={to} className={cn('flex flex-col items-center justify-center px-3 py-2 rounded-2xl transition-all duration-200 active:scale-90 gap-0.5 min-w-0', active ? 'text-[#4F46E5] dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400')} style={active ? { background: C.surfaceLow } : {}}>
     {icon}
     <span className="text-[10px] font-semibold uppercase tracking-wider leading-none">{label}</span>
   </Link>
 );
-
 const TxRow = ({ transaction, onTogglePaid, onEdit, onDelete }: { transaction: Transaction; onTogglePaid: (id: string) => void; onEdit: (t: Transaction) => void; onDelete: (t: Transaction) => void }) => {
   const isIncome = transaction.type === 'income';
   const emoji = categoryEmoji[transaction.category] || '📌';
@@ -102,13 +96,10 @@ const TxRow = ({ transaction, onTogglePaid, onEdit, onDelete }: { transaction: T
     </div>
   );
 };
-
 interface DashboardProps { session: Session; }
-
 export default function Dashboard({ session }: DashboardProps) {
   const location = useLocation();
   const { darkMode, toggleDarkMode } = useDarkMode();
-
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(toMonthKey(new Date()));
@@ -117,7 +108,6 @@ export default function Dashboard({ session }: DashboardProps) {
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
-
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -128,9 +118,7 @@ export default function Dashboard({ session }: DashboardProps) {
     };
     load();
   }, []);
-
   useEffect(() => { setSelectedIds(new Set()); }, [selectedMonth, statusFilter]);
-
   const handleAdd = async (newTx: Omit<Transaction, 'id'>[]) => {
     const rows = newTx.map(t => toSupabase(t, session.user.id));
     const { data, error } = await supabase.from('transactions').insert(rows).select();
@@ -139,7 +127,6 @@ export default function Dashboard({ session }: DashboardProps) {
     setTransactions(prev => [...added, ...prev]);
     toast.success(added.length > 1 ? `${added.length} criadas!` : 'Adicionada!');
   };
-
   const handleEdit = async (tx: Transaction) => {
     const { error } = await supabase.from('transactions').update(toSupabase(tx, session.user.id)).eq('id', tx.id);
     if (error) { toast.error('Erro'); return; }
@@ -147,7 +134,6 @@ export default function Dashboard({ session }: DashboardProps) {
     setEditingTransaction(undefined);
     toast.success('Atualizada!');
   };
-
   const handleDelete = async () => {
     if (!deletingTransaction) return;
     const { error } = await supabase.from('transactions').delete().eq('id', deletingTransaction.id);
@@ -156,7 +142,6 @@ export default function Dashboard({ session }: DashboardProps) {
     toast.success('Excluída!');
     setDeletingTransaction(null);
   };
-
   const handleToggle = async (id: string) => {
     const t = transactions.find(t => t.id === id);
     if (!t) return;
@@ -166,9 +151,7 @@ export default function Dashboard({ session }: DashboardProps) {
     setTransactions(prev => prev.map(t => t.id === id ? updated : t));
     toast.success('Status atualizado!');
   };
-
   const handleSelectAll = () => setSelectedIds(selectedIds.size === pendingTx.length ? new Set() : new Set(pendingTx.map(t => t.id)));
-
   const handleBulkDelete = async () => {
     const ids = Array.from(selectedIds);
     const { error } = await supabase.from('transactions').delete().in('id', ids);
@@ -178,35 +161,29 @@ export default function Dashboard({ session }: DashboardProps) {
     setSelectedIds(new Set());
     setShowBulkDeleteConfirm(false);
   };
-
   const navigateMonth = (dir: 'prev' | 'next') => {
     const [y, m] = selectedMonth.split('-').map(Number);
     setSelectedMonth(toMonthKey(new Date(y, m - 1 + (dir === 'next' ? 1 : -1), 1)));
   };
-
   // ─── Month transactions ────────────────────────────────────────────────────
   const txMonth = transactions.filter(t => t.dueDate.startsWith(selectedMonth));
-
   // Hero card — full month projection (all transactions regardless of paid status)
   const projectedIncome   = txMonth.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const projectedExpense  = txMonth.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const projectedBalance  = projectedIncome - projectedExpense;
   const overdueCount      = txMonth.filter(t => getTransactionStatus(t) === 'overdue').length;
-
   // ✅ Summary cards — only paid/received transactions (real money moved)
   const realIncome   = txMonth.filter(t => t.type === 'income'  && t.isPaid).reduce((s, t) => s + t.amount, 0);
   const realExpense  = txMonth.filter(t => t.type === 'expense' && t.isPaid).reduce((s, t) => s + t.amount, 0);
   const realBalance  = realIncome - realExpense;
   const paidIncomeCount   = txMonth.filter(t => t.type === 'income'  && t.isPaid).length;
   const paidExpenseCount  = txMonth.filter(t => t.type === 'expense' && t.isPaid).length;
-
   // Pending list (unpaid only)
   const pendingTx = txMonth.filter(t => {
     if (t.isPaid) return false;
     if (statusFilter === 'all') return true;
     return getTransactionStatus(t) === statusFilter;
   }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-
   // Donut chart — all expenses for the month
   const expByCat = txMonth.filter(t => t.type === 'expense').reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {} as Record<string, number>);
   const totalExp = Object.values(expByCat).reduce((s, v) => s + v, 0);
@@ -219,13 +196,10 @@ export default function Dashboard({ session }: DashboardProps) {
     donutOffset -= pct;
     return seg;
   });
-
   const allSelected  = pendingTx.length > 0 && selectedIds.size === pendingTx.length;
   const someSelected = selectedIds.size > 0;
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 sm:pb-0">
-
       {/* ── Header ── */}
       <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 back-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
@@ -250,9 +224,9 @@ export default function Dashboard({ session }: DashboardProps) {
                 <DropdownMenuContent align="end" className="w-44">
                   <DropdownMenuItem asChild>
                     <Link to="/conta" className="flex items-center gap-2 cursor-pointer">
-                    <User className="w-4 h-4 text-slate-500" /> Minha Conta
-                      </Link>
-                    </DropdownMenuItem>
+                      <UserIcon className="w-4 h-4 text-slate-500" /> Minha Conta
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/extrato" className="flex items-center gap-2 cursor-pointer"><FileText className="w-4 h-4 text-slate-500" /> Extrato</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/historico" className="flex items-center gap-2 cursor-pointer"><History className="w-4 h-4 text-slate-500" /> Histórico</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/cartoes" className="flex items-center gap-2 cursor-pointer"><CreditCard className="w-4 h-4 text-slate-500" /> Cartões</Link></DropdownMenuItem>
@@ -270,9 +244,7 @@ export default function Dashboard({ session }: DashboardProps) {
           </div>
         </div>
       </header>
-
       <main className="max-w-6xl mx-auto px-3 sm:px-6 py-5 space-y-5">
-
         {/* ── Hero Card — full month projection ── */}
         <div className="rounded-2xl p-6 sm:p-8 text-white relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${C.primary} 0%, ${C.primaryDark} 100%)`, boxShadow: `0 20px 40px ${C.primary}26` }}>
           <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full opacity-10" style={{ background: 'white', filter: 'blur(32px)' }} />
@@ -297,10 +269,8 @@ export default function Dashboard({ session }: DashboardProps) {
             </Link>
           </div>
         </div>
-
         {/* ── Summary Cards — REAL (paid/received only) ── */}
         <div>
-          {/* Label explaining these are real values */}
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
             Valores confirmados — apenas lançamentos pagos/recebidos
@@ -320,7 +290,6 @@ export default function Dashboard({ session }: DashboardProps) {
                 )}
               </p>
             </div>
-
             {/* Despesas reais */}
             <div className="rounded-2xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/30 p-5 transition-all hover:shadow-md hover:-translate-y-0.5">
               <div className="flex items-start justify-between mb-3">
@@ -335,7 +304,6 @@ export default function Dashboard({ session }: DashboardProps) {
                 )}
               </p>
             </div>
-
             {/* Saldo real */}
             <div className="rounded-2xl border border-violet-200 dark:border-violet-800/50 bg-violet-50 dark:bg-violet-950/30 p-5 transition-all hover:shadow-md hover:-translate-y-0.5">
               <div className="flex items-start justify-between mb-3">
@@ -352,14 +320,12 @@ export default function Dashboard({ session }: DashboardProps) {
             </div>
           </div>
         </div>
-
         {loading ? (
           <div className="flex items-center justify-center py-24">
             <div className="w-8 h-8 rounded-full border-2 border-violet-600 border-t-transparent animate-spin" />
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-
             {/* ── Pending ── */}
             <div className="lg:col-span-3 space-y-3">
               <div className="flex items-center justify-between">
@@ -374,7 +340,6 @@ export default function Dashboard({ session }: DashboardProps) {
                   </SelectContent>
                 </Select>
               </div>
-
               {pendingTx.length > 0 && (
                 <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-2">
@@ -384,7 +349,6 @@ export default function Dashboard({ session }: DashboardProps) {
                   {someSelected && <Button size="sm" variant="destructive" onClick={() => setShowBulkDeleteConfirm(true)} className="h-6 text-xs gap-1 px-2.5"><Trash2 className="w-3 h-3" /> Excluir {selectedIds.size}</Button>}
                 </div>
               )}
-
               <div className="space-y-2">
                 {pendingTx.length > 0 ? pendingTx.map(tx => (
                   <TxRow key={tx.id} transaction={tx} onTogglePaid={handleToggle} onEdit={setEditingTransaction} onDelete={setDeletingTransaction} />
@@ -397,7 +361,6 @@ export default function Dashboard({ session }: DashboardProps) {
                 )}
               </div>
             </div>
-
             {/* ── Right column ── */}
             <div className="lg:col-span-2 space-y-4">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Resumo</h2>
@@ -443,7 +406,6 @@ export default function Dashboard({ session }: DashboardProps) {
           </div>
         )}
       </main>
-
       {/* ── Bottom Nav (mobile only) ── */}
       <nav className="fixed bottom-0 left-0 w-full z-50 flex sm:hidden justify-around items-center px-2 pb-6 pt-3 rounded-t-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl" style={{ borderTop: '1px solid rgba(15,23,42,0.06)', boxShadow: '0 -8px 32px rgba(15,23,42,0.07)' }}>
         <BottomNavItem to="/" active={location.pathname === '/'} icon={<LayoutGrid className="w-5 h-5" />} label="Home" />
@@ -455,7 +417,6 @@ export default function Dashboard({ session }: DashboardProps) {
           <span className="text-[10px] font-semibold uppercase tracking-wider leading-none">Tema</span>
         </button>
       </nav>
-
       {editingTransaction && <NewTransactionDialog transaction={editingTransaction} onEdit={handleEdit} trigger={<div />} />}
       <DeleteConfirmationDialog open={!!deletingTransaction} onOpenChange={open => !open && setDeletingTransaction(null)} transaction={deletingTransaction} onConfirm={handleDelete} />
       <DeleteConfirmationDialog open={showBulkDeleteConfirm} onOpenChange={open => !open && setShowBulkDeleteConfirm(false)} transaction={null} customMessage={`Excluir ${selectedIds.size} transação(ões)?`} onConfirm={handleBulkDelete} />
